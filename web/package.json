@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev --webpack",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-dev-ports.ps1 && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev --webpack",
+    "dev:kill": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-dev-ports.ps1",
     "dev:turbo": "next dev",
     "build": "next build",
     "start": "next start",
