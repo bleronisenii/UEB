@@ -2,9 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signOut } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { DashboardView } from "@/components/dashboard/DashboardView";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -15,12 +14,6 @@ export default function DashboardPage() {
       router.replace("/login");
     }
   }, [loading, user, router]);
-
-  async function handleSignOut() {
-    await signOut(getFirebaseAuth());
-    router.replace("/login");
-    router.refresh();
-  }
 
   if (loading) {
     return (
@@ -38,18 +31,5 @@ export default function DashboardPage() {
     return null;
   }
 
-  return (
-    <div id="container">
-      <div id="right-container">
-        <div id="dashboard">
-          <p>Dashboard — migration in progress</p>
-          <div id="buttons">
-            <button type="button" onClick={handleSignOut}>
-              Dil
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <DashboardView user={user} />;
 }
