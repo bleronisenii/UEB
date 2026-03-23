@@ -395,6 +395,9 @@ export function DashboardView({ user }: DashboardViewProps) {
 
           <div id="buttons">
             <h3>Pagesat:</h3>
+            <button type="button" onClick={() => router.push("/history")}>
+              Historiku
+            </button>
             <button type="button" onClick={() => router.push("/urim")}>
               Urim
             </button>

@@ -1,0 +1,223 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  writeBatch,
+  type DocumentData,
+  type Transaction,
+  type Unsubscribe,
+} from "firebase/firestore";
+import type { User } from "firebase/auth";
+import { getFirebaseFirestore } from "@/lib/firebase";
+import {
+  ACTIVITY_LOG_SUBCOLLECTION,
+  USER_APP_DATA_COLLECTION,
+} from "@/lib/firestore/collections";
+import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
+import type { ExpenseOwnerKey } from "@/types/userApp";
+import type { UserAppData } from "@/types/userApp";
+import type { ActivityEvent, ActivityEventParsed } from "@/types/activityLog";
+
+const ACTIVITY_PAGE_SIZE = 2000;
+
+export function activityLogCollectionRef(uid: string) {
+  return collection(
+    getFirebaseFirestore(),
+    USER_APP_DATA_COLLECTION,
+    uid,
+    ACTIVITY_LOG_SUBCOLLECTION
+  );
+}
+
+function newActivityDocRef(uid: string) {
+  return doc(activityLogCollectionRef(uid));
+}
+
+export type ActivityWritePayload = Omit<
+  ActivityEvent,
+  "createdAt" | "source"
+> & {
+  source?: ActivityEvent["source"];
+};
+
+export function appendActivityInTransaction(
+  tx: Transaction,
+  uid: string,
+  payload: ActivityWritePayload
+): void {
+  const ref = newActivityDocRef(uid);
+  const { source, ...rest } = payload;
+  tx.set(ref, {
+    ...rest,
+    ...(source ? { source } : {}),
+    createdAt: serverTimestamp(),
+  });
+}
+
+function parseTimestampMs(data: DocumentData): Date | null {
+  const ts = data.createdAt;
+  if (ts && typeof ts.toDate === "function") {
+    return ts.toDate();
+  }
+  return null;
+}
+
+function isExpenseOwnerKey(v: unknown): v is ExpenseOwnerKey {
+  return (
+    typeof v === "string" &&
+    (EXPENSE_OWNER_KEYS as readonly string[]).includes(v)
+  );
+}
+
+export function parseActivityDoc(
+  id: string,
+  data: DocumentData
+): ActivityEventParsed | null {
+  const action = data.action;
+  const stream = data.stream;
+  if (action !== "create" && action !== "update" && action !== "delete") {
+    return null;
+  }
+  if (stream !== "income" && stream !== "expense") {
+    return null;
+  }
+  const client = typeof data.client === "string" ? data.client : "";
+  const amount = typeof data.amount === "number" ? data.amount : 0;
+  const date = typeof data.date === "string" ? data.date : "";
+  const ownerKey =
+    stream === "income"
+      ? null
+      : data.ownerKey === null
+        ? null
+        : isExpenseOwnerKey(data.ownerKey)
+          ? data.ownerKey
+          : null;
+  return {
+    id,
+    action,
+    stream,
+    ownerKey,
+    entryId: typeof data.entryId === "string" ? data.entryId : null,
+    client,
+    amount,
+    date,
+    previousClient:
+      typeof data.previousClient === "string" ? data.previousClient : undefined,
+    previousAmount:
+      typeof data.previousAmount === "number" ? data.previousAmount : undefined,
+    budgetDelta:
+      typeof data.budgetDelta === "number" ? data.budgetDelta : undefined,
+    source: data.source === "backfill" ? "backfill" : undefined,
+    createdAt: parseTimestampMs(data),
+  };
+}
+
+export function subscribeActivityLog(
+  user: User,
+  onData: (events: ActivityEventParsed[]) => void,
+  onError: (err: Error) => void
+): Unsubscribe {
+  const q = query(
+    activityLogCollectionRef(user.uid),
+    orderBy("createdAt", "desc"),
+    limit(ACTIVITY_PAGE_SIZE)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: ActivityEventParsed[] = [];
+      for (const d of snap.docs) {
+        const parsed = parseActivityDoc(d.id, d.data());
+        if (parsed) list.push(parsed);
+      }
+      onData(list);
+    },
+    (err) => onError(err)
+  );
+}
+
+const uidBackfillScheduled = new Set<string>();
+
+/**
+ * If the log is empty but the user already has ledger rows, create one
+ * `create` event per row so the history view is not blank for legacy data.
+ */
+export async function backfillActivityLogIfEmpty(
+  user: User,
+  data: UserAppData
+): Promise<void> {
+  if (uidBackfillScheduled.has(user.uid)) return;
+  uidBackfillScheduled.add(user.uid);
+
+  const col = activityLogCollectionRef(user.uid);
+  const probe = await getDocs(query(col, limit(1)));
+  if (!probe.empty) return;
+
+  const hasAny =
+    data.dashboardEntries.length > 0 ||
+    EXPENSE_OWNER_KEYS.some((k) => data.expenses[k].length > 0);
+  if (!hasAny) {
+    uidBackfillScheduled.delete(user.uid);
+    return;
+  }
+
+  const db = getFirebaseFirestore();
+  let batch = writeBatch(db);
+  let n = 0;
+
+  const flush = async () => {
+    if (n === 0) return;
+    await batch.commit();
+    batch = writeBatch(db);
+    n = 0;
+  };
+
+  const enqueue = async (payload: Record<string, unknown>) => {
+    batch.set(doc(col), {
+      ...payload,
+      createdAt: serverTimestamp(),
+    });
+    n++;
+    if (n >= 450) await flush();
+  };
+
+  for (const e of data.dashboardEntries) {
+    await enqueue({
+      action: "create",
+      stream: "income",
+      ownerKey: null,
+      entryId: e.id ?? null,
+      client: e.client,
+      amount: e.amount,
+      date: e.date,
+      source: "backfill",
+    });
+  }
+
+  for (const owner of EXPENSE_OWNER_KEYS) {
+    for (const e of data.expenses[owner]) {
+      await enqueue({
+        action: "create",
+        stream: "expense",
+        ownerKey: owner,
+        entryId: e.id ?? null,
+        client: e.client,
+        amount: e.amount,
+        date: e.date,
+        source: "backfill",
+      });
+    }
+  }
+
+  try {
+    await flush();
+  } catch (e) {
+    uidBackfillScheduled.delete(user.uid);
+    throw e;
+  }
+}
