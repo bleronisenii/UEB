@@ -169,6 +169,66 @@ body {
   box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
 }
 
+.history-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+#filter-container.history-filters select {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 140px;
+  max-width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+  background: #fafafa;
+  color: #111;
+}
+
+#filter-container.history-filters select:focus {
+  outline: none;
+  border-color: #2196f3;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+#filter-container.history-filters select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.history-intro {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #444;
+  margin: 0 0 16px;
+}
+
+td.history-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #666;
+}
+
+.history-budget-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-budget-pos {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.history-budget-neg {
+  color: #c62828;
+  font-weight: 600;
+}
+
 /* -------- STATUS -------- */
 #status {
   display: flex;

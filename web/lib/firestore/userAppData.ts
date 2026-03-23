@@ -8,6 +8,8 @@ import {
 } from "firebase/firestore";
 import { getFirebaseFirestore } from "@/lib/firebase";
 import type { User } from "firebase/auth";
+import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
+import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
 import {
   EXPENSE_OWNER_KEYS,
   type ExpenseOwnerKey,
@@ -15,10 +17,8 @@ import {
   type UserAppData,
 } from "@/types/userApp";
 
-const COLLECTION = "userAppData";
-
 export function userAppDataRef(uid: string) {
-  return doc(getFirebaseFirestore(), COLLECTION, uid);
+  return doc(getFirebaseFirestore(), USER_APP_DATA_COLLECTION, uid);
 }
 
 export function createDefaultUserAppData(): UserAppData {
@@ -102,6 +102,16 @@ export async function addDashboardEntry(
       : createDefaultUserAppData();
     data.dashboardEntries = [...data.dashboardEntries, entry];
     data.totalBudget += amount;
+    appendActivityInTransaction(tx, user.uid, {
+      action: "create",
+      stream: "income",
+      ownerKey: null,
+      entryId: id,
+      client,
+      amount,
+      date: dateStr,
+      budgetDelta: amount,
+    });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }
@@ -115,13 +125,52 @@ export async function deleteDashboardEntry(
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
     const data = parseUserAppData(snap.data() as Record<string, unknown>);
-    data.dashboardEntries = data.dashboardEntries.filter((e) => e.id !== entry.id);
-    data.totalBudget -= entry.amount;
+    const fromDb = entry.id
+      ? data.dashboardEntries.find((e) => e.id === entry.id)
+      : undefined;
+    if (!fromDb) return;
+
+    const cascaded: { owner: ExpenseOwnerKey; exp: LedgerEntry }[] = [];
+    for (const k of EXPENSE_OWNER_KEYS) {
+      for (const exp of data.expenses[k]) {
+        if (exp.client === fromDb.client) {
+          cascaded.push({ owner: k, exp });
+        }
+      }
+    }
+
+    data.dashboardEntries = data.dashboardEntries.filter(
+      (e) => e.id !== entry.id
+    );
+    data.totalBudget -= fromDb.amount;
     for (const k of EXPENSE_OWNER_KEYS) {
       data.expenses[k] = data.expenses[k].filter(
-        (exp) => exp.client !== entry.client
+        (exp) => exp.client !== fromDb.client
       );
     }
+
+    appendActivityInTransaction(tx, user.uid, {
+      action: "delete",
+      stream: "income",
+      ownerKey: null,
+      entryId: fromDb.id ?? null,
+      client: fromDb.client,
+      amount: fromDb.amount,
+      date: fromDb.date,
+      budgetDelta: -fromDb.amount,
+    });
+    for (const { owner, exp } of cascaded) {
+      appendActivityInTransaction(tx, user.uid, {
+        action: "delete",
+        stream: "expense",
+        ownerKey: owner,
+        entryId: exp.id ?? null,
+        client: exp.client,
+        amount: exp.amount,
+        date: exp.date,
+      });
+    }
+
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }
@@ -156,6 +205,19 @@ export async function updateDashboardEntry(
     }
     data.dashboardEntries = [...data.dashboardEntries];
     data.dashboardEntries[idx] = next;
+    const budgetDelta = next.amount - prev.amount;
+    appendActivityInTransaction(tx, user.uid, {
+      action: "update",
+      stream: "income",
+      ownerKey: null,
+      entryId,
+      client: next.client,
+      amount: next.amount,
+      date: next.date,
+      previousClient: prev.client,
+      previousAmount: prev.amount,
+      budgetDelta,
+    });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }
@@ -195,6 +257,15 @@ export async function addExpenseEntry(
       ? parseUserAppData(snap.data() as Record<string, unknown>)
       : createDefaultUserAppData();
     data.expenses[ownerKey] = [...data.expenses[ownerKey], entry];
+    appendActivityInTransaction(tx, user.uid, {
+      action: "create",
+      stream: "expense",
+      ownerKey,
+      entryId: id,
+      client,
+      amount,
+      date: dateStr,
+    });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }
@@ -210,6 +281,16 @@ export async function deleteExpenseEntry(
     if (!snap.exists()) return;
     const data = parseUserAppData(snap.data() as Record<string, unknown>);
     const list = data.expenses[ownerKey];
+    const fromDb = entry.id
+      ? list.find((e) => e.id === entry.id)
+      : list.find(
+          (e) =>
+            e.client === entry.client &&
+            e.date === entry.date &&
+            e.amount === entry.amount
+        );
+    if (!fromDb) return;
+
     data.expenses[ownerKey] = entry.id
       ? list.filter((e) => e.id !== entry.id)
       : list.filter(
@@ -220,6 +301,15 @@ export async function deleteExpenseEntry(
               e.amount === entry.amount
             )
         );
+    appendActivityInTransaction(tx, user.uid, {
+      action: "delete",
+      stream: "expense",
+      ownerKey,
+      entryId: fromDb.id ?? null,
+      client: fromDb.client,
+      amount: fromDb.amount,
+      date: fromDb.date,
+    });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }
@@ -249,6 +339,17 @@ export async function updateExpenseEntry(
     }
     list[idx] = next;
     data.expenses[ownerKey] = list;
+    appendActivityInTransaction(tx, user.uid, {
+      action: "update",
+      stream: "expense",
+      ownerKey,
+      entryId,
+      client: next.client,
+      amount: next.amount,
+      date: next.date,
+      previousClient: prev.client,
+      previousAmount: prev.amount,
+    });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
 }

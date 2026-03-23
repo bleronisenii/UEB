@@ -4,5 +4,10 @@ service cloud.firestore {
     match /userAppData/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    match /userAppData/{userId}/activityLog/{eventId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
   }
 }
