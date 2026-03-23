@@ -24,6 +24,12 @@ function getAuthErrorMessage(err: unknown): string {
         return "Email ose fjalëkalim i gabuar.";
       case "auth/too-many-requests":
         return "Shumë përpjekje. Provoni më vonë.";
+      case "auth/configuration-not-found":
+        return "Firebase Auth nuk është aktivizuar ose .env.local nuk përputhet me projektin. Hapni Authentication në Firebase Console dhe aktivizoni Email/Password; kopjoni sërish çelësat nga Project settings → Your apps.";
+      case "auth/invalid-api-key":
+        return "API key i pavlefshëm. Kontrolloni NEXT_PUBLIC_FIREBASE_API_KEY në .env.local (Project settings → Your apps).";
+      case "auth/operation-not-allowed":
+        return "Ky mënyrë hyrjeje nuk është aktivizuar. Në Firebase Console → Authentication → Sign-in method, aktivizoni Email/Password.";
       default:
         break;
     }
