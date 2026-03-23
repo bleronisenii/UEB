@@ -22,7 +22,7 @@ const WITHDRAWAL_TITLES: Record<ExpenseOwnerKey, string> = {
   urim: "Pagesat - Urim",
   elvis: "Pagesat - Elvis",
   bunjamin: "Pagesat - Bunjamin",
-  puntoret: "Puntorët",
+  puntoret: "Punëtorët",
 };
 
 const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]> = {
@@ -30,19 +30,19 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Elvis", href: "/elvis" },
     { label: "Bunjamin", href: "/bunjamin" },
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Puntorët", href: "/puntoret" },
+    { label: "Punëtorët", href: "/puntoret" },
   ],
   elvis: [
     { label: "Bunjamin", href: "/bunjamin" },
     { label: "Urim", href: "/urim" },
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Puntorët", href: "/puntoret" },
+    { label: "Punëtorët", href: "/puntoret" },
   ],
   bunjamin: [
     { label: "Urim", href: "/urim" },
     { label: "Elvis", href: "/elvis" },
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Puntorët", href: "/puntoret" },
+    { label: "Punëtorët", href: "/puntoret" },
   ],
   puntoret: [
     { label: "Dashboard", href: "/dashboard" },
@@ -373,15 +373,13 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
 
       <div id="right-container">
         <div id="dashboard">
-        
-
           <div id="status">
             <div className="box blue">
-              <h3>Buxheti i mbetur</h3>
+              <h3>Gjendja Aktuale</h3>
               <p id="remaining">{remaining} €</p>
             </div>
             <div className="box red">
-              <h3>Harxhimet</h3>
+              <h3>Daljet</h3>
               <p id="totalExpenses">{myTotal} €</p>
             </div>
           </div>

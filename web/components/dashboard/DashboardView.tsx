@@ -337,17 +337,17 @@ export function DashboardView({ user }: DashboardViewProps) {
         <div id="dashboard">
           <div id="status">
             <div className="box green">
-              <h3>Buxheti Total</h3>
+              <h3>Të Hyrat Totale</h3>
               <p id="totalBudget">{totalBudget} €</p>
             </div>
 
             <div className="box red">
-              <h3>Harxhimet</h3>
+              <h3>Daljet Totale</h3>
               <p id="totalExpenses">{totalExpenses} €</p>
             </div>
 
             <div className="box blue">
-              <h3>Te mbetura</h3>
+              <h3>Gjendja Aktuale</h3>
               <p id="remaining">{remaining} €</p>
             </div>
           </div>
