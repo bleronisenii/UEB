@@ -327,3 +327,8 @@ td.client {
   box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
   cursor: pointer;
 }
+
+/* Login: single column using existing #left-container / .card */
+.login-page #left-container {
+  width: 100%;
+}
