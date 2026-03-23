@@ -247,11 +247,22 @@ td.client {
 #buttons {
   margin-top: 25px;
   display: flex;
+  align-items: center;
   gap: 15px;
+  width: 100%;
+}
+
+#buttons > h3 {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 #buttons button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 12px 0;
   border: none;
   border-radius: 12px;
@@ -322,6 +333,9 @@ td.client {
     font-size: 16px;
     padding: 10px;
   }
+}
+h1{
+  font-size: 20px;
 }
 
 .card .logo {
