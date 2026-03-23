@@ -345,3 +345,19 @@ td.client {
 .login-page #left-container {
   width: 100%;
 }
+
+.login-toggle {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 14px;
+}
+
+.login-toggle button {
+  background: none;
+  border: none;
+  color: #2196f3;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+  padding: 0;
+}
