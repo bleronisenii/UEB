@@ -108,17 +108,21 @@ body {
   margin-bottom: 20px;
 }
 
-#filterInput {
+/* Match any filter field id (e.g. filterInput, filterInput-urim) — must not rely on #filterInput only */
+#filter-container input[type="text"] {
+  box-sizing: border-box;
   width: 95%;
+  max-width: 100%;
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid #ddd;
   font-size: 16px;
   background: #fafafa;
+  color: #111;
   transition: all 0.2s ease;
 }
 
-#filterInput:focus {
+#filter-container input[type="text"]:focus {
   outline: none;
   border-color: #2196f3;
   background: white;
