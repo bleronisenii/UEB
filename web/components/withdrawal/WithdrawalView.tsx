@@ -426,6 +426,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
               />
             ) : null}
           </div>
+          
 
           <div id="buttons">
             <h3>Pagesat:</h3>
