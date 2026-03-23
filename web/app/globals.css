@@ -1,26 +1,329 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* -------- Legacy budget app (migrated from static HTML; do not restyle) -------- */
+
+/* -------- GENERAL -------- */
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: #f4f6f9;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+#container {
+  display: flex;
+  height: 100vh;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* -------- LEFT -------- */
+#left-container {
+  width: 40%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card {
+  background: white;
+  width: 80%;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.card h1 {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.form-group {
+  margin: 20px 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+}
+
+/* ADD BUTTON */
+#addBtn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: #4caf50;
+  color: white;
+  font-size: 18px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+#addBtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* -------- RIGHT -------- */
+#right-container {
+  width: 60%;
+  padding: 20px;
+}
+
+#dashboard {
+  background: white;
+  height: 95%;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* -------- FILTER -------- */
+#filter-container {
+  margin-bottom: 20px;
+}
+
+#filterInput {
+  width: 95%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+  background: #fafafa;
+  transition: all 0.2s ease;
+}
+
+#filterInput:focus {
+  outline: none;
+  border-color: #2196f3;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+/* -------- STATUS -------- */
+#status {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.box {
+  flex: 1;
+  padding: 20px;
+  border-radius: 15px;
+  text-align: center;
+  color: white;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.box:hover {
+  transform: scale(1.05);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+}
+
+.green {
+  background: #4caf50;
+}
+.red {
+  background: #f44336;
+}
+.blue {
+  background: #2196f3;
+}
+
+.box h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.box p {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* -------- TABLE -------- */
+/* VERTICAL SCROLL AFTER 6 ROWS */
+tbody {
+  display: block;
+  max-height: calc(6 * 48px);
+  overflow-y: auto;
+}
+
+thead,
+tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+th {
+  background: #f1f1f1;
+}
+
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+  text-align: center;
+}
+
+td.client {
+  max-width: 200px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+/* -------- ACTION BUTTONS -------- */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.action-btn {
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: 0.2s;
+}
+
+.edit-btn {
+  background: #2196f3;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #0b7dda;
+}
+
+.delete-btn {
+  background: #f44336;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #c62828;
+}
+
+/* -------- BUTTONS -------- */
+#buttons {
+  margin-top: 25px;
+  display: flex;
+  gap: 15px;
+}
+
+#buttons button {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  border-radius: 12px;
+  background: #f44336;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+#buttons button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+  background: #c32b1d;
+}
+
+/* -------- RESPONSIVE -------- */
+@media (max-width: 1024px) {
+  #container {
+    flex-direction: column;
+  }
+  #left-container,
+  #right-container {
+    width: 100%;
+  }
+  #left-container {
+    padding: 20px 0;
+  }
+  .card {
+    width: 90%;
+  }
+  #dashboard {
+    height: auto;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (max-width: 600px) {
+  .card {
+    padding: 20px;
+  }
+  .card h1 {
+    font-size: 20px;
+  }
+  .form-group input {
+    font-size: 14px;
+    padding: 10px;
+  }
+  #addBtn {
+    font-size: 16px;
+    padding: 12px;
+  }
+  #status {
+    flex-direction: column;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  #buttons {
+    flex-direction: column;
+  }
+  #buttons button {
+    font-size: 16px;
+    padding: 10px;
+  }
+}
+
+.card .logo {
+  display: block;
+  margin: 0 auto 20px auto;
+  max-width: 280px;
+  height: auto;
+  border-radius: 10px;
+  transition:
+    transform 0.5s ease,
+    box-shadow 0.5s ease;
+}
+
+.card .logo:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
 }
