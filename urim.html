@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harxhimet - Urim</title>
+
+<style>
+/* -------- GENERAL -------- */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #f4f6f9;
+}
+
+#container {
+    display: flex;
+    height: 100vh;
+}
+
+/* -------- LEFT -------- */
+#left-container {
+    width: 40%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.card {
+    background: white;
+    width: 80%;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.card h1 {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.form-group {
+    margin: 20px 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+}
+
+/* ADD BUTTON */
+#addBtn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    background: #4CAF50;
+    color: white;
+    font-size: 18px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+}
+
+#addBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.2);
+}
+
+/* -------- RIGHT -------- */
+#right-container {
+    width: 60%;
+    padding: 20px;
+}
+
+#dashboard {
+    background: white;
+    height: 95%;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+/* -------- FILTER -------- */
+#filter-container {
+    margin-bottom: 20px;
+}
+
+#filterInput {
+    width: 95%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    font-size: 16px;
+    background: #fafafa;
+    transition: all 0.2s ease;
+}
+
+#filterInput:focus {
+    outline: none;
+    border-color: #2196F3;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(33,150,243,0.1);
+}
+
+/* -------- STATUS -------- */
+#status {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.box {
+    flex: 1;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.box:hover {
+    transform: scale(1.05);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+}
+
+.green { background: #4CAF50; }
+.red { background: #f44336; }
+.blue { background: #2196F3; }
+
+.box h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.box p {
+    margin-top: 10px;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+/* -------- TABLE -------- */
+/* VERTICAL SCROLL AFTER 6 ROWS */
+tbody {
+    display: block;
+    max-height: calc(6 * 48px); /* 6 rows * approx height per row */
+    overflow-y: auto;
+}
+
+thead, tbody tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    background: #f1f1f1;
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+}
+
+/* -------- ACTION BUTTONS -------- */
+.actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.action-btn {
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.2s;
+}
+
+.edit-btn {
+    background: #2196F3;
+    color: white;
+}
+
+.edit-btn:hover {
+    background: #0b7dda;
+}
+
+.delete-btn {
+    background: #f44336;
+    color: white;
+}
+
+.delete-btn:hover {
+    background: #c62828;
+}
+
+/* -------- BUTTONS -------- */
+#buttons {
+    margin-top: 25px;
+    display: flex;
+    /* flex-direction: column; */
+    gap: 15px;
+}
+
+#buttons button {
+    flex: 1;
+    padding: 12px 0;
+    border: none;
+    border-radius: 12px;
+    background: #f44336;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+}
+
+table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+td.client {
+    max-width: 200px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+#buttons button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.2);
+    background: #c32b1d;
+}
+
+
+/* -------- RESPONSIVE -------- */
+@media (max-width: 1024px) {
+    #container { flex-direction: column; }
+    #left-container, #right-container { width: 100%; }
+    #left-container { padding: 20px 0; }
+    .card { width: 90%; }
+    #dashboard { height: auto; }
+}
+
+@media (max-width: 600px) {
+    .card { padding: 20px; }
+    .card h1 { font-size: 20px; }
+    .form-group input { font-size: 14px; padding: 10px; }
+    #addBtn { font-size: 16px; padding: 12px; }
+    #status { flex-direction: column; }
+    table { display: block; overflow-x: auto; white-space: nowrap; }
+    #buttons { flex-direction: column; }
+    #buttons button { font-size: 16px; padding: 10px; }
+}
+.card .logo {
+    display: block;
+    margin: 0 auto 20px auto; /* qendron në mes dhe ka hapësirë poshtë */
+    max-width: 280px;          /* madhësia maksimale */
+    height: auto;              /* ruan raportin e aspektit */
+    border-radius: 10px;       /* këndet pak të rrumbullakosura */
+    transition: transform 0.5s ease, box-shadow 0.5s ease; /* rritje më e ngadaltë */
+}
+
+.card .logo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.2);
+    cursor: pointer; /* tregon që mund të klikohet */
+}
+</style>
+</head>
+
+<body>
+
+<div id="container">
+
+    <!-- LEFT -->
+    <div id="left-container">
+        <div class="card">
+            <img src="logo.png" alt="Logo" class="logo">
+            <h1>Pagesat - Urim</h1>
+
+            <div class="form-group">
+                <label>Përshkrimi</label>
+                <input type="text" id="clientInput" placeholder="Shkruaj emrin...">
+            </div>
+
+            <div class="form-group">
+                <label>Shuma</label>
+                <input type="number" id="amountInput" placeholder="Shkruaj shumën...">
+            </div>
+
+            <button id="addBtn">ADD</button>
+        </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div id="right-container">
+        <div id="dashboard">
+
+            <!-- STATUS -->
+            <div id="status">
+                <div class="box blue">
+                    <h3>Buxheti i mbetur</h3>
+                    <p id="remaining">0 €</p>
+                </div>
+                <div class="box red">
+                    <h3>Harxhimet</h3>
+                    <p id="totalExpenses">0 €</p>
+                </div>
+            </div>
+            <!-- FILTER -->
+            <div id="filter-container">
+                <input 
+                    type="text" 
+                    id="filterInput" 
+                    placeholder="Filtro sipas klientit ose datës..."
+                >
+            </div>
+
+
+            <!-- TABLE -->
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Përshkrimi</th>
+                        <th>Shuma</th>
+                        <th>Ndrysho</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+
+            <!-- BUTTONS -->
+            <div id="buttons">
+                <h3>Pagesat:</h3>
+                <button onclick="location.href='elvis.html'">Elvis</button>
+                <button onclick="location.href='bunjamin.html'">Bunjamin</button>
+                <button onclick="location.href='dashboard.html'">Dashboard</button>
+                <button onclick="location.href='puntoret.html'">Puntorët</button>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script src="./scripts/withdrawals.js"></script>
+
+</body>
+</html>
