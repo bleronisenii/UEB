@@ -24,15 +24,39 @@ body {
 
 #container {
   display: flex;
-  height: 100vh;
+  align-items: stretch;
+  min-height: 100vh;
+  height: auto;
 }
 
 /* -------- LEFT -------- */
 #left-container {
   width: 40%;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+/* Toolbar strip: Dil top-left, scroll/pagination mode top-right (dashboard) */
+#left-container .dashboard-column-toolbar {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+#left-container .card {
+  align-self: center;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .card {
@@ -91,16 +115,32 @@ body {
 #right-container {
   width: 60%;
   padding: 20px;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 #dashboard {
   background: white;
-  height: 95%;
+  height: auto;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: 15px;
   padding: 20px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  overflow: visible;
+}
+
+/* Fills space between stats and Pagesat; table scrolls inside on wide screens */
+.dashboard-ledger {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
 }
 
 /* -------- FILTER -------- */
@@ -111,7 +151,7 @@ body {
 /* Match any filter field id (e.g. filterInput, filterInput-urim) — must not rely on #filterInput only */
 #filter-container input[type="text"] {
   box-sizing: border-box;
-  width: 95%;
+  width: 100%;
   max-width: 100%;
   padding: 14px 16px;
   border-radius: 12px;
@@ -175,24 +215,23 @@ body {
 }
 
 /* -------- TABLE -------- */
-/* VERTICAL SCROLL AFTER 6 ROWS */
-tbody {
-  display: block;
-  max-height: calc(6 * 48px);
-  overflow-y: auto;
-}
-
-thead,
-tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tbody {
+  display: table-row-group;
+}
+
+thead tr,
+tbody tr {
+  display: table-row;
 }
 
 th {
@@ -211,6 +250,166 @@ td.client {
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: normal;
+}
+
+/* Ledger table area */
+.ledger-table-wrap {
+  width: 100%;
+  min-height: 0;
+}
+
+/* Scroll mode: inner pane scrolls all rows (height from flex parent on desktop) */
+.ledger-table-scroll {
+  width: 100%;
+  min-height: 0;
+}
+
+.ledger-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f1f1f1;
+}
+
+/*
+ * Viewport-locked shell (dashboard + withdrawal): inner table scroll, Pagesat pinned.
+ * Uses 100dvh on phones so dynamic toolbar doesn’t break layout; 100vh fallback.
+ */
+#container.app-viewport-lock {
+  display: flex;
+  align-items: stretch;
+  min-height: 100dvh;
+  min-height: 100vh;
+  height: 100dvh;
+  height: 100vh;
+  max-height: 100dvh;
+  max-height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#container.app-viewport-lock #left-container {
+  min-height: 0;
+  overflow-y: auto;
+  align-self: stretch;
+}
+
+#container.app-viewport-lock #right-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#container.app-viewport-lock #dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+#container.app-viewport-lock #dashboard .dashboard-ledger {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#container.app-viewport-lock #dashboard .ledger-table-wrap--scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#container.app-viewport-lock #dashboard .ledger-table-wrap--scroll .ledger-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#container.app-viewport-lock #dashboard .ledger-table-wrap:not(.ledger-table-wrap--scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#container.app-viewport-lock #dashboard .table-pagination {
+  flex-shrink: 0;
+}
+
+#container.app-viewport-lock #dashboard #buttons {
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+@media (min-width: 1025px) {
+  #container.app-viewport-lock {
+    flex-direction: row;
+  }
+
+  #container.app-viewport-lock #left-container {
+    width: 40%;
+  }
+
+  #container.app-viewport-lock #right-container {
+    width: 60%;
+  }
+}
+
+@media (max-width: 1024px) {
+  #container.app-viewport-lock {
+    flex-direction: column;
+  }
+}
+
+#left-container .dashboard-toolbar-signout {
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-left: 20px;
+  margin-top: 40px;
+  border: none;
+  background: #f44336;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease;
+}
+
+#left-container .dashboard-toolbar-signout:hover {
+  background: #c62828;
+}
+
+button.ledger-pagination-toggle {
+  border: 1px solid #ccc;
+  padding: 8px 14px;
+  margin-right: 20px;
+  margin-top: 40px;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #111;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+button.ledger-pagination-toggle:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+button.ledger-pagination-toggle[aria-pressed="true"] {
+  background: #e3f2fd;
+  border-color: #2196f3;
 }
 
 /* -------- ACTION BUTTONS -------- */
@@ -296,13 +495,18 @@ td.client {
   #right-container {
     width: 100%;
   }
+  #container.app-viewport-lock #left-container,
+  #container.app-viewport-lock #right-container {
+    width: 100%;
+    max-width: 100%;
+  }
   #left-container {
     padding: 20px 0;
   }
   .card {
     width: 90%;
   }
-  #dashboard {
+  #container:not(.app-viewport-lock) #dashboard {
     height: auto;
   }
 }
@@ -322,6 +526,12 @@ td.client {
     font-size: 16px;
     padding: 12px;
   }
+  #right-container {
+    padding: 12px;
+  }
+  #dashboard {
+    padding: 16px;
+  }
   #status {
     flex-direction: column;
   }
@@ -330,12 +540,34 @@ td.client {
     overflow-x: auto;
     white-space: nowrap;
   }
+  .ledger-table-wrap--scroll table,
+  .ledger-table-scroll table {
+    display: table;
+    white-space: normal;
+  }
   #buttons {
     flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  #buttons > h3 {
+    width: 100%;
+    text-align: left;
+    align-self: flex-start;
   }
   #buttons button {
+    flex: none;
+    width: 100%;
     font-size: 16px;
-    padding: 10px;
+    padding: 12px 16px;
+    border-radius: 999px;
+    background: #ff9800;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  #buttons button:hover {
+    background: #f57c00;
+    transform: none;
   }
 }
 h1{
@@ -378,4 +610,66 @@ h1{
   text-decoration: underline;
   font: inherit;
   padding: 0;
+}
+
+/* Table pagination (under ledger tables) */
+.table-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.table-pagination-info {
+  font-size: 14px;
+  color: #333;
+}
+
+.table-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-pagination-page {
+  font-size: 14px;
+  color: #333;
+  min-width: 7rem;
+  text-align: center;
+}
+
+.table-pagination-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #2196f3;
+  color: white;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.table-pagination-btn:hover:not(:disabled) {
+  background: #0b7dda;
+}
+
+.table-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .table-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .table-pagination-actions {
+    justify-content: center;
+  }
 }

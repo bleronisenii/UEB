@@ -32,5 +32,7 @@ export function WithdrawalPage({ ownerKey }: { ownerKey: ExpenseOwnerKey }) {
     return null;
   }
 
-  return <WithdrawalView user={user} ownerKey={ownerKey} />;
+  return (
+    <WithdrawalView key={ownerKey} user={user} ownerKey={ownerKey} />
+  );
 }

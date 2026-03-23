@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -11,6 +12,10 @@ import {
   sumOwnerExpenses,
   updateExpenseEntry,
 } from "@/lib/firestore/userAppData";
+import { getFirebaseAuth } from "@/lib/firebase";
+import { TablePagination } from "@/components/pagination/TablePagination";
+import { useLedgerPaginationPreference } from "@/hooks/useLedgerPaginationPreference";
+import { useLedgerRowsPerView } from "@/hooks/useLedgerRowsPerView";
 import type { ExpenseOwnerKey, LedgerEntry, UserAppData } from "@/types/userApp";
 
 const WITHDRAWAL_TITLES: Record<ExpenseOwnerKey, string> = {
@@ -61,11 +66,14 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
   const [clientInput, setClientInput] = useState("");
   const [amountInput, setAmountInput] = useState("");
   const [filterInput, setFilterInput] = useState("");
+  const [tablePage, setTablePage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editClient, setEditClient] = useState("");
   const [editAmount, setEditAmount] = useState("");
 
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const { paginationEnabled, togglePagination } = useLedgerPaginationPreference();
+  const ledgerRows = useLedgerRowsPerView();
 
   useEffect(() => {
     const unsub = subscribeUserAppData(
@@ -92,6 +100,22 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
         item.client.toLowerCase().includes(q) || item.date.includes(q)
     );
   }, [appData, ownerKey, filterInput]);
+
+  const pageSize = Math.max(1, ledgerRows);
+
+  const totalTablePages = paginationEnabled
+    ? Math.max(1, Math.ceil(filteredEntries.length / pageSize))
+    : 1;
+
+  const safeTablePage = paginationEnabled
+    ? Math.min(Math.max(1, tablePage), totalTablePages)
+    : 1;
+
+  const displayEntries = useMemo(() => {
+    if (!paginationEnabled) return filteredEntries;
+    const start = (safeTablePage - 1) * pageSize;
+    return filteredEntries.slice(start, start + pageSize);
+  }, [filteredEntries, paginationEnabled, safeTablePage, pageSize]);
 
   const totalBudget = appData?.totalBudget ?? 0;
   const totalAllExpenses = appData ? sumAllExpenses(appData) : 0;
@@ -174,9 +198,15 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     [saveEdit]
   );
 
+  async function handleSignOut() {
+    await signOut(getFirebaseAuth());
+    router.replace("/login");
+    router.refresh();
+  }
+
   if (!ready && !loadError) {
     return (
-      <div id="container">
+      <div id="container" className="app-viewport-lock">
         <div id="right-container">
           <div id="dashboard">
             <p>Duke u ngarkuar…</p>
@@ -188,7 +218,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
 
   if (loadError) {
     return (
-      <div id="container">
+      <div id="container" className="app-viewport-lock">
         <div id="right-container">
           <div id="dashboard">
             <p>{loadError}</p>
@@ -201,9 +231,106 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
   const title = WITHDRAWAL_TITLES[ownerKey];
   const nav = WITHDRAWAL_NAV[ownerKey];
 
+  const ledgerTable = (
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Përshkrimi</th>
+          <th>Shuma</th>
+          <th>Ndrysho</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        {displayEntries.map((item) => (
+          <tr
+            key={item.id || `${item.date}-${item.client}-${item.amount}`}
+            ref={(el) => {
+              if (item.id) rowRefs.current[item.id] = el;
+            }}
+          >
+            <td>{item.date}</td>
+            <td className="client">
+              {editingId === item.id ? (
+                <input
+                  type="text"
+                  value={editClient}
+                  aria-label="Ndrysho përshkrimin"
+                  title="Ndrysho përshkrimin"
+                  onChange={(e) => setEditClient(e.target.value)}
+                  onBlur={() => scheduleBlurSave(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveEdit(item);
+                  }}
+                />
+              ) : (
+                item.client
+              )}
+            </td>
+            <td className="amount">
+              {editingId === item.id ? (
+                <input
+                  type="number"
+                  value={editAmount}
+                  aria-label="Ndrysho shumën"
+                  title="Ndrysho shumën"
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  onBlur={() => scheduleBlurSave(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveEdit(item);
+                  }}
+                />
+              ) : (
+                item.amount
+              )}
+            </td>
+            <td>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="action-btn edit-btn"
+                  onClick={() => startEdit(item)}
+                >
+                  EDIT
+                </button>
+                <button
+                  type="button"
+                  className="action-btn delete-btn"
+                  onClick={() => void onDelete(item)}
+                >
+                  X
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
-    <div id="container">
+    <div id="container" className="app-viewport-lock">
       <div id="left-container">
+        <div className="dashboard-column-toolbar">
+          <button
+            type="button"
+            className="dashboard-toolbar-signout"
+            onClick={() => void handleSignOut()}
+          >
+            Dil
+          </button>
+          <button
+            type="button"
+            className="ledger-pagination-toggle"
+            aria-pressed={paginationEnabled}
+            onClick={() => {
+              togglePagination();
+              setTablePage(1);
+            }}
+          >
+            {paginationEnabled ? "Pamje me scroll" : "Ndarë në faqe"}
+          </button>
+        </div>
         <div className="card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Logo" className="logo" />
@@ -246,6 +373,8 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
 
       <div id="right-container">
         <div id="dashboard">
+        
+
           <div id="status">
             <div className="box blue">
               <h3>Buxheti i mbetur</h3>
@@ -256,7 +385,6 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
               <p id="totalExpenses">{myTotal} €</p>
             </div>
           </div>
-
           <div id="filter-container">
             <label htmlFor={`filterInput-${ownerKey}`} className="sr-only">
               Filtro sipas klientit ose datës
@@ -266,84 +394,38 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
               id={`filterInput-${ownerKey}`}
               placeholder="Filtro sipas klientit ose datës..."
               value={filterInput}
-              onChange={(e) => setFilterInput(e.target.value)}
+              onChange={(e) => {
+                setFilterInput(e.target.value);
+                setTablePage(1);
+              }}
             />
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Përshkrimi</th>
-                <th>Shuma</th>
-                <th>Ndrysho</th>
-              </tr>
-            </thead>
-            <tbody id="tableBody">
-              {filteredEntries.map((item) => (
-                <tr
-                  key={item.id || `${item.date}-${item.client}-${item.amount}`}
-                  ref={(el) => {
-                    if (item.id) rowRefs.current[item.id] = el;
-                  }}
-                >
-                  <td>{item.date}</td>
-                  <td className="client">
-                    {editingId === item.id ? (
-                      <input
-                        type="text"
-                        value={editClient}
-                        aria-label="Ndrysho përshkrimin"
-                        title="Ndrysho përshkrimin"
-                        onChange={(e) => setEditClient(e.target.value)}
-                        onBlur={() => scheduleBlurSave(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void saveEdit(item);
-                        }}
-                      />
-                    ) : (
-                      item.client
-                    )}
-                  </td>
-                  <td className="amount">
-                    {editingId === item.id ? (
-                      <input
-                        type="number"
-                        value={editAmount}
-                        aria-label="Ndrysho shumën"
-                        title="Ndrysho shumën"
-                        onChange={(e) => setEditAmount(e.target.value)}
-                        onBlur={() => scheduleBlurSave(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void saveEdit(item);
-                        }}
-                      />
-                    ) : (
-                      item.amount
-                    )}
-                  </td>
-                  <td>
-                    <div className="actions">
-                      <button
-                        type="button"
-                        className="action-btn edit-btn"
-                        onClick={() => startEdit(item)}
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        type="button"
-                        className="action-btn delete-btn"
-                        onClick={() => void onDelete(item)}
-                      >
-                        X
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="dashboard-ledger">
+            <div
+              className={
+                paginationEnabled
+                  ? "ledger-table-wrap"
+                  : "ledger-table-wrap ledger-table-wrap--scroll"
+              }
+            >
+              {paginationEnabled ? (
+                ledgerTable
+              ) : (
+                <div className="ledger-table-scroll">{ledgerTable}</div>
+              )}
+            </div>
+
+            {paginationEnabled ? (
+              <TablePagination
+                page={safeTablePage}
+                totalPages={totalTablePages}
+                totalItems={filteredEntries.length}
+                pageSize={pageSize}
+                onPageChange={setTablePage}
+              />
+            ) : null}
+          </div>
 
           <div id="buttons">
             <h3>Pagesat:</h3>
