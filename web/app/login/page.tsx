@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
 
 function getAuthErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
@@ -39,10 +40,17 @@ function getAuthErrorMessage(err: unknown): string {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,6 +83,22 @@ export default function LoginPage() {
     } catch (err) {
       alert(getAuthErrorMessage(err));
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="login-page" id="container">
+        <div id="left-container">
+          <div className="card">
+            <p>Duke u ngarkuar…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return null;
   }
 
   return (
