@@ -10,9 +10,11 @@ import { getFirebaseFirestore } from "@/lib/firebase";
 import type { User } from "firebase/auth";
 import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
 import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
+import { convertToEur, isLedgerCurrency, ledgerAmountEur } from "@/lib/currency";
 import {
   EXPENSE_OWNER_KEYS,
   type ExpenseOwnerKey,
+  type LedgerCurrency,
   type LedgerEntry,
   type UserAppData,
 } from "@/types/userApp";
@@ -34,12 +36,36 @@ export function createDefaultUserAppData(): UserAppData {
   };
 }
 
+function parseLedgerEntry(raw: unknown): LedgerEntry {
+  if (!raw || typeof raw !== "object") {
+    return { client: "", amount: 0, date: "" };
+  }
+  const o = raw as Record<string, unknown>;
+  const client = typeof o.client === "string" ? o.client : "";
+  const amount =
+    typeof o.amount === "number" && !Number.isNaN(o.amount) ? o.amount : 0;
+  const date = typeof o.date === "string" ? o.date : "";
+  const id = typeof o.id === "string" ? o.id : undefined;
+  const currency = isLedgerCurrency(o.currency) ? o.currency : undefined;
+  let amountEur =
+    typeof o.amountEur === "number" && !Number.isNaN(o.amountEur)
+      ? o.amountEur
+      : undefined;
+  if (amountEur === undefined) {
+    amountEur = amount;
+  }
+  const entry: LedgerEntry = { id, client, amount, date, amountEur };
+  if (currency) entry.currency = currency;
+  return entry;
+}
+
 function ensureExpensesShape(
   raw: Record<string, LedgerEntry[] | undefined> | undefined
 ): UserAppData["expenses"] {
   const out = {} as UserAppData["expenses"];
   for (const k of EXPENSE_OWNER_KEYS) {
-    out[k] = Array.isArray(raw?.[k]) ? raw[k]! : [];
+    const arr = Array.isArray(raw?.[k]) ? raw[k]! : [];
+    out[k] = arr.map(parseLedgerEntry);
   }
   return out;
 }
@@ -50,7 +76,7 @@ export function parseUserAppData(raw: Record<string, unknown>): UserAppData {
   const total = raw.totalBudget;
   return {
     dashboardEntries: Array.isArray(entries)
-      ? (entries as LedgerEntry[])
+      ? (entries as unknown[]).map(parseLedgerEntry)
       : base.dashboardEntries,
     totalBudget: typeof total === "number" && !Number.isNaN(total) ? total : 0,
     expenses: ensureExpensesShape(
@@ -86,14 +112,25 @@ export async function addDashboardEntry(
   user: User,
   client: string,
   amount: number,
-  dateStr: string
+  dateStr: string,
+  currency: LedgerCurrency,
+  eurMkdRate: number,
+  chfMkdRate: number
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   const id =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const entry: LedgerEntry = { id, client, amount, date: dateStr };
+  const amountEur = convertToEur(amount, currency, eurMkdRate, chfMkdRate);
+  const entry: LedgerEntry = {
+    id,
+    client,
+    amount,
+    date: dateStr,
+    currency,
+    amountEur,
+  };
 
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
@@ -101,7 +138,7 @@ export async function addDashboardEntry(
       ? parseUserAppData(snap.data() as Record<string, unknown>)
       : createDefaultUserAppData();
     data.dashboardEntries = [...data.dashboardEntries, entry];
-    data.totalBudget += amount;
+    data.totalBudget += amountEur;
     appendActivityInTransaction(tx, user.uid, {
       action: "create",
       stream: "income",
@@ -109,8 +146,10 @@ export async function addDashboardEntry(
       entryId: id,
       client,
       amount,
+      currency,
+      amountEur,
       date: dateStr,
-      budgetDelta: amount,
+      budgetDelta: amountEur,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });
@@ -142,7 +181,8 @@ export async function deleteDashboardEntry(
     data.dashboardEntries = data.dashboardEntries.filter(
       (e) => e.id !== entry.id
     );
-    data.totalBudget -= fromDb.amount;
+    const removedEur = ledgerAmountEur(fromDb);
+    data.totalBudget -= removedEur;
     for (const k of EXPENSE_OWNER_KEYS) {
       data.expenses[k] = data.expenses[k].filter(
         (exp) => exp.client !== fromDb.client
@@ -156,8 +196,10 @@ export async function deleteDashboardEntry(
       entryId: fromDb.id ?? null,
       client: fromDb.client,
       amount: fromDb.amount,
+      currency: fromDb.currency ?? "EUR",
+      amountEur: removedEur,
       date: fromDb.date,
-      budgetDelta: -fromDb.amount,
+      budgetDelta: -removedEur,
     });
     for (const { owner, exp } of cascaded) {
       appendActivityInTransaction(tx, user.uid, {
@@ -167,6 +209,8 @@ export async function deleteDashboardEntry(
         entryId: exp.id ?? null,
         client: exp.client,
         amount: exp.amount,
+        currency: exp.currency ?? "EUR",
+        amountEur: ledgerAmountEur(exp),
         date: exp.date,
       });
     }
@@ -180,7 +224,10 @@ export async function updateDashboardEntry(
   entryId: string,
   oldClient: string,
   newClientInput: string,
-  newAmountInput: number
+  newAmountInput: number,
+  newCurrency: LedgerCurrency,
+  eurMkdRate: number,
+  chfMkdRate: number
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -195,8 +242,11 @@ export async function updateDashboardEntry(
       next.client = newClientInput.trim();
     }
     if (!Number.isNaN(newAmountInput)) {
-      data.totalBudget = data.totalBudget - prev.amount + newAmountInput;
+      const prevEur = ledgerAmountEur(prev);
       next.amount = newAmountInput;
+      next.currency = newCurrency;
+      next.amountEur = convertToEur(newAmountInput, newCurrency, eurMkdRate, chfMkdRate);
+      data.totalBudget = data.totalBudget - prevEur + next.amountEur;
       for (const k of EXPENSE_OWNER_KEYS) {
         data.expenses[k] = data.expenses[k].map((exp) =>
           exp.client === oldClient ? { ...exp, client: next.client } : exp
@@ -205,7 +255,9 @@ export async function updateDashboardEntry(
     }
     data.dashboardEntries = [...data.dashboardEntries];
     data.dashboardEntries[idx] = next;
-    const budgetDelta = next.amount - prev.amount;
+    const prevEur = ledgerAmountEur(prev);
+    const nextEur = ledgerAmountEur(next);
+    const budgetDelta = nextEur - prevEur;
     appendActivityInTransaction(tx, user.uid, {
       action: "update",
       stream: "income",
@@ -213,9 +265,13 @@ export async function updateDashboardEntry(
       entryId,
       client: next.client,
       amount: next.amount,
+      currency: next.currency ?? "EUR",
+      amountEur: nextEur,
       date: next.date,
       previousClient: prev.client,
       previousAmount: prev.amount,
+      previousCurrency: prev.currency ?? "EUR",
+      previousAmountEur: prevEur,
       budgetDelta,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -225,7 +281,7 @@ export async function updateDashboardEntry(
 export function sumAllExpenses(data: UserAppData): number {
   let sum = 0;
   for (const k of EXPENSE_OWNER_KEYS) {
-    sum += data.expenses[k].reduce((s, e) => s + e.amount, 0);
+    sum += data.expenses[k].reduce((s, e) => s + ledgerAmountEur(e), 0);
   }
   return sum;
 }
@@ -234,7 +290,7 @@ export function sumOwnerExpenses(
   data: UserAppData,
   ownerKey: ExpenseOwnerKey
 ): number {
-  return data.expenses[ownerKey].reduce((s, e) => s + e.amount, 0);
+  return data.expenses[ownerKey].reduce((s, e) => s + ledgerAmountEur(e), 0);
 }
 
 export async function addExpenseEntry(
@@ -242,14 +298,25 @@ export async function addExpenseEntry(
   ownerKey: ExpenseOwnerKey,
   client: string,
   amount: number,
-  dateStr: string
+  dateStr: string,
+  currency: LedgerCurrency,
+  eurMkdRate: number,
+  chfMkdRate: number
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   const id =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const entry: LedgerEntry = { id, client, amount, date: dateStr };
+  const amountEur = convertToEur(amount, currency, eurMkdRate, chfMkdRate);
+  const entry: LedgerEntry = {
+    id,
+    client,
+    amount,
+    date: dateStr,
+    currency,
+    amountEur,
+  };
 
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
@@ -264,6 +331,8 @@ export async function addExpenseEntry(
       entryId: id,
       client,
       amount,
+      currency,
+      amountEur,
       date: dateStr,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -308,6 +377,8 @@ export async function deleteExpenseEntry(
       entryId: fromDb.id ?? null,
       client: fromDb.client,
       amount: fromDb.amount,
+      currency: fromDb.currency ?? "EUR",
+      amountEur: ledgerAmountEur(fromDb),
       date: fromDb.date,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -319,7 +390,10 @@ export async function updateExpenseEntry(
   ownerKey: ExpenseOwnerKey,
   entryId: string,
   newClientInput: string,
-  newAmountInput: number
+  newAmountInput: number,
+  newCurrency: LedgerCurrency,
+  eurMkdRate: number,
+  chfMkdRate: number
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -336,9 +410,13 @@ export async function updateExpenseEntry(
     }
     if (!Number.isNaN(newAmountInput)) {
       next.amount = newAmountInput;
+      next.currency = newCurrency;
+      next.amountEur = convertToEur(newAmountInput, newCurrency, eurMkdRate, chfMkdRate);
     }
     list[idx] = next;
     data.expenses[ownerKey] = list;
+    const prevEur = ledgerAmountEur(prev);
+    const nextEur = ledgerAmountEur(next);
     appendActivityInTransaction(tx, user.uid, {
       action: "update",
       stream: "expense",
@@ -346,9 +424,13 @@ export async function updateExpenseEntry(
       entryId,
       client: next.client,
       amount: next.amount,
+      currency: next.currency ?? "EUR",
+      amountEur: nextEur,
       date: next.date,
       previousClient: prev.client,
       previousAmount: prev.amount,
+      previousCurrency: prev.currency ?? "EUR",
+      previousAmountEur: prevEur,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });

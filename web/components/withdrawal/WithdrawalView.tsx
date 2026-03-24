@@ -13,10 +13,28 @@ import {
   updateExpenseEntry,
 } from "@/lib/firestore/userAppData";
 import { getFirebaseAuth } from "@/lib/firebase";
+import {
+  AmountEurMkd,
+  FormCurrencyHint,
+  LedgerCurrencySelect,
+  LedgerRowAmount,
+} from "@/components/AmountEurMkd";
 import { TablePagination } from "@/components/pagination/TablePagination";
 import { useLedgerPaginationPreference } from "@/hooks/useLedgerPaginationPreference";
 import { useLedgerRowsPerView } from "@/hooks/useLedgerRowsPerView";
-import type { ExpenseOwnerKey, LedgerEntry, UserAppData } from "@/types/userApp";
+import { useEurMkdRate } from "@/contexts/EurMkdRateContext";
+import { formatEur, formatRate } from "@/lib/formatMoney";
+import { downloadExcelCsv } from "@/lib/export/excelCsv";
+import { parseLedgerAmountInput } from "@/lib/export/eurMkd";
+import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
+import { amountToMkdDisplay, ledgerAmountEur } from "@/lib/currency";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import type {
+  ExpenseOwnerKey,
+  LedgerCurrency,
+  LedgerEntry,
+  UserAppData,
+} from "@/types/userApp";
 
 const WITHDRAWAL_TITLES: Record<ExpenseOwnerKey, string> = {
   urim: "Pagesat - Urim",
@@ -31,6 +49,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Bunjamin", href: "/bunjamin" },
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
+    { label: "Përmbledhje", href: "/reports" },
     { label: "Punëtorët", href: "/puntoret" },
   ],
   elvis: [
@@ -38,6 +57,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Urim", href: "/urim" },
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
+    { label: "Përmbledhje", href: "/reports" },
     { label: "Punëtorët", href: "/puntoret" },
   ],
   bunjamin: [
@@ -45,11 +65,13 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Elvis", href: "/elvis" },
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
+    { label: "Përmbledhje", href: "/reports" },
     { label: "Punëtorët", href: "/puntoret" },
   ],
   puntoret: [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
+    { label: "Përmbledhje", href: "/reports" },
     { label: "Urim", href: "/urim" },
     { label: "Elvis", href: "/elvis" },
     { label: "Bunjamin", href: "/bunjamin" },
@@ -69,12 +91,22 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
 
   const [clientInput, setClientInput] = useState("");
   const [amountInput, setAmountInput] = useState("");
+  const [currencyInput, setCurrencyInput] = useState<LedgerCurrency>("EUR");
   const [filterInput, setFilterInput] = useState("");
   const [tablePage, setTablePage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editClient, setEditClient] = useState("");
   const [editAmount, setEditAmount] = useState("");
+  const [editCurrency, setEditCurrency] = useState<LedgerCurrency>("EUR");
 
+  const {
+    rateInput,
+    setRateInput,
+    rate,
+    chfMkdRateInput,
+    setChfMkdRateInput,
+    chfMkdRate,
+  } = useEurMkdRate();
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const { paginationEnabled, togglePagination } = useLedgerPaginationPreference();
   const ledgerRows = useLedgerRowsPerView();
@@ -125,6 +157,151 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
   const totalAllExpenses = appData ? sumAllExpenses(appData) : 0;
   const myTotal = appData ? sumOwnerExpenses(appData, ownerKey) : 0;
   const remaining = totalBudget - totalAllExpenses;
+  const title = WITHDRAWAL_TITLES[ownerKey];
+  const nav = WITHDRAWAL_NAV[ownerKey];
+  const entryLabel = ownerKey === "puntoret" ? "Punëtori" : "Përshkrimi";
+  const entryPlaceholder =
+    ownerKey === "puntoret" ? "Shkruaj emrin e punëtorit..." : "Shkruaj emrin...";
+
+  const exportWithdrawals = useCallback(() => {
+    if (filteredEntries.length === 0) {
+      alert("Nuk ka të dhëna për eksport.");
+      return;
+    }
+
+    const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
+
+    const exportedTotal = filteredEntries.reduce(
+      (sum, entry) => sum + ledgerAmountEur(entry),
+      0
+    );
+
+    const rows = [
+      [
+        { header: "Data", value: "Data" },
+        { header: "Pershkrimi", value: entryLabel },
+        { header: "Valuta", value: "Valuta" },
+        { header: "Shuma", value: "Shuma (në valutë)" },
+        { header: "EUR", value: "EUR (ekv.)" },
+        { header: "MKD", value: "Shuma (MKD)" },
+      ],
+      ...filteredEntries.map((entry) => {
+        const eur = ledgerAmountEur(entry);
+        const cur = entry.currency ?? "EUR";
+        return [
+          { header: "Data", value: entry.date },
+          { header: "Pershkrimi", value: entry.client },
+          { header: "Valuta", value: cur },
+          { header: "Shuma", value: entry.amount },
+          { header: "EUR", value: formatEur(eur) },
+          {
+            header: "MKD",
+            value: formatMkd(
+              amountToMkdDisplay(entry.amount, cur, rate, chfMkdRate)
+            ),
+          },
+        ];
+      }),
+      [
+        { header: "Data", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: "" },
+      ],
+      [
+        { header: "Data", value: "Përmbledhje" },
+        { header: "Pershkrimi", value: "Vlera" },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: "" },
+      ],
+      [
+        {
+          header: "Data",
+          value: "Kursi i përdorur për konvertim (1 EUR = MKD)",
+        },
+        { header: "Pershkrimi", value: formatRate(rate) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: "" },
+      ],
+      [
+        {
+          header: "Data",
+          value: "Kursi i përdorur për konvertim (1 CHF = MKD)",
+        },
+        { header: "Pershkrimi", value: formatRate(chfMkdRate) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: "" },
+      ],
+      [
+        { header: "Data", value: "Totali buxhetit (global)" },
+        { header: "Pershkrimi", value: formatEur(totalBudget) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: mkdFromEur(totalBudget) },
+      ],
+      [
+        { header: "Data", value: "Totali daljeve (global)" },
+        { header: "Pershkrimi", value: formatEur(totalAllExpenses) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: mkdFromEur(totalAllExpenses) },
+      ],
+      [
+        { header: "Data", value: "Fitimi / Gjendja aktuale (global)" },
+        { header: "Pershkrimi", value: formatEur(remaining) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: mkdFromEur(remaining) },
+      ],
+      [
+        { header: "Data", value: `Totali i tabit ${title}` },
+        { header: "Pershkrimi", value: formatEur(myTotal) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: mkdFromEur(myTotal) },
+      ],
+      [
+        { header: "Data", value: "Totali i rreshtave të eksportuar" },
+        { header: "Pershkrimi", value: formatEur(exportedTotal) },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: mkdFromEur(exportedTotal) },
+      ],
+      [
+        { header: "Data", value: "Numri i rreshtave të eksportuar" },
+        { header: "Pershkrimi", value: filteredEntries.length },
+        { header: "Valuta", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "EUR", value: "" },
+        { header: "MKD", value: "" },
+      ],
+    ];
+    downloadExcelCsv(`${ownerKey}-export`, rows);
+  }, [
+    chfMkdRate,
+    entryLabel,
+    filteredEntries,
+    myTotal,
+    ownerKey,
+    rate,
+    remaining,
+    title,
+    totalAllExpenses,
+    totalBudget,
+  ]);
 
   const addItem = useCallback(async () => {
     const client = clientInput.trim();
@@ -139,14 +316,24 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     }
     const date = new Date().toLocaleDateString();
     try {
-      await addExpenseEntry(user, ownerKey, client, amount, date);
+      await addExpenseEntry(
+        user,
+        ownerKey,
+        client,
+        amount,
+        date,
+        currencyInput,
+        rate,
+        chfMkdRate
+      );
       setClientInput("");
       setAmountInput("");
+      setCurrencyInput("EUR");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ruajtja dështoi.";
       alert(msg);
     }
-  }, [amountInput, clientInput, ownerKey, user]);
+  }, [amountInput, chfMkdRate, clientInput, currencyInput, ownerKey, rate, user]);
 
   const onDelete = useCallback(
     async (entry: LedgerEntry) => {
@@ -165,19 +352,23 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     setEditingId(entry.id);
     setEditClient(entry.client);
     setEditAmount(String(entry.amount));
+    setEditCurrency(entry.currency ?? "EUR");
   }, []);
 
   const saveEdit = useCallback(
     async (entry: LedgerEntry) => {
       if (!entry.id || editingId !== entry.id) return;
-      const newAmount = parseFloat(editAmount);
+      const newAmount = parseLedgerAmountInput(editAmount);
       try {
         await updateExpenseEntry(
           user,
           ownerKey,
           entry.id,
           editClient,
-          newAmount
+          newAmount,
+          editCurrency,
+          rate,
+          chfMkdRate
         );
         setEditingId(null);
       } catch (e) {
@@ -185,7 +376,16 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
         alert(msg);
       }
     },
-    [editAmount, editClient, editingId, ownerKey, user]
+    [
+      chfMkdRate,
+      editAmount,
+      editClient,
+      editCurrency,
+      editingId,
+      ownerKey,
+      rate,
+      user,
+    ]
   );
 
   const scheduleBlurSave = useCallback(
@@ -232,16 +432,13 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     );
   }
 
-  const title = WITHDRAWAL_TITLES[ownerKey];
-  const nav = WITHDRAWAL_NAV[ownerKey];
-
   const ledgerTable = (
-    <table>
+    <table className="ledger-data-table">
       <thead>
         <tr>
           <th>Data</th>
-          <th>Përshkrimi</th>
-          <th>Shuma</th>
+          <th>{entryLabel}</th>
+          <th>Shuma (€ / MKD / CHF)</th>
           <th>Ndrysho</th>
         </tr>
       </thead>
@@ -259,8 +456,8 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
                 <input
                   type="text"
                   value={editClient}
-                  aria-label="Ndrysho përshkrimin"
-                  title="Ndrysho përshkrimin"
+                  aria-label={`Ndrysho ${entryLabel.toLowerCase()}`}
+                  title={`Ndrysho ${entryLabel.toLowerCase()}`}
                   onChange={(e) => setEditClient(e.target.value)}
                   onBlur={() => scheduleBlurSave(item)}
                   onKeyDown={(e) => {
@@ -273,19 +470,26 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
             </td>
             <td className="amount">
               {editingId === item.id ? (
-                <input
-                  type="number"
-                  value={editAmount}
-                  aria-label="Ndrysho shumën"
-                  title="Ndrysho shumën"
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  onBlur={() => scheduleBlurSave(item)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void saveEdit(item);
-                  }}
-                />
+                <div className="amount-currency-row">
+                  <input
+                    type="number"
+                    value={editAmount}
+                    aria-label="Ndrysho shumën"
+                    title="Ndrysho shumën"
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    onBlur={() => scheduleBlurSave(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveEdit(item);
+                    }}
+                  />
+                  <LedgerCurrencySelect
+                    id={`edit-currency-${ownerKey}-${item.id}`}
+                    value={editCurrency}
+                    onChange={setEditCurrency}
+                  />
+                </div>
               ) : (
-                item.amount
+                <LedgerRowAmount entry={item} />
               )}
             </td>
             <td>
@@ -323,17 +527,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           >
             Dil
           </button>
-          <button
-            type="button"
-            className="ledger-pagination-toggle"
-            aria-pressed={paginationEnabled}
-            onClick={() => {
-              togglePagination();
-              setTablePage(1);
-            }}
-          >
-            {paginationEnabled ? "Pamje me scroll" : "Ndarë në faqe"}
-          </button>
+          <ThemeToggle />
         </div>
         <div className="card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -342,11 +536,11 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           <h1>{title}</h1>
 
           <div className="form-group">
-            <label htmlFor={`clientInput-${ownerKey}`}>Përshkrimi</label>
+            <label htmlFor={`clientInput-${ownerKey}`}>{entryLabel}</label>
             <input
               id={`clientInput-${ownerKey}`}
               type="text"
-              placeholder="Shkruaj emrin..."
+              placeholder={entryPlaceholder}
               value={clientInput}
               onChange={(e) => setClientInput(e.target.value)}
               onKeyDown={(e) => {
@@ -357,16 +551,24 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
 
           <div className="form-group">
             <label htmlFor={`amountInput-${ownerKey}`}>Shuma</label>
-            <input
-              id={`amountInput-${ownerKey}`}
-              type="number"
-              placeholder="Shkruaj shumën..."
-              value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addItem();
-              }}
-            />
+            <div className="amount-currency-row">
+              <input
+                id={`amountInput-${ownerKey}`}
+                type="number"
+                placeholder="Shkruaj shumën..."
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void addItem();
+                }}
+              />
+              <LedgerCurrencySelect
+                id={`currencyInput-${ownerKey}`}
+                value={currencyInput}
+                onChange={setCurrencyInput}
+              />
+            </div>
+            <FormCurrencyHint amountStr={amountInput} currency={currencyInput} />
           </div>
 
           <button id="addBtn" type="button" onClick={() => void addItem()}>
@@ -380,27 +582,81 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           <div id="status">
             <div className="box blue">
               <h3>Gjendja Aktuale</h3>
-              <p id="remaining">{remaining} €</p>
+              <p id="remaining">
+                <AmountEurMkd eur={remaining} />
+              </p>
             </div>
             <div className="box red">
               <h3>Daljet</h3>
-              <p id="totalExpenses">{myTotal} €</p>
+              <p id="totalExpenses">
+                <AmountEurMkd eur={myTotal} />
+              </p>
             </div>
           </div>
           <div id="filter-container">
-            <label htmlFor={`filterInput-${ownerKey}`} className="sr-only">
-              Filtro sipas klientit ose datës
-            </label>
-            <input
-              type="text"
-              id={`filterInput-${ownerKey}`}
-              placeholder="Filtro sipas klientit ose datës..."
-              value={filterInput}
-              onChange={(e) => {
-                setFilterInput(e.target.value);
-                setTablePage(1);
-              }}
-            />
+            <div className="filter-actions-row">
+              <label htmlFor={`filterInput-${ownerKey}`} className="sr-only">
+                Filtro sipas klientit ose datës
+              </label>
+              <input
+                type="text"
+                id={`filterInput-${ownerKey}`}
+                placeholder="Filtro sipas klientit ose datës..."
+                value={filterInput}
+                onChange={(e) => {
+                  setFilterInput(e.target.value);
+                  setTablePage(1);
+                }}
+              />
+              <div className="currency-rates-block">
+                <div className="eur-mkd-field">
+                  <label htmlFor={`eur-mkd-rate-${ownerKey}`}>
+                    Kursi EUR → MKD (1 € sa denarë)
+                  </label>
+                  <input
+                    id={`eur-mkd-rate-${ownerKey}`}
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="61.5"
+                    value={rateInput}
+                    onChange={(e) => setRateInput(e.target.value)}
+                  />
+                </div>
+                <div className="eur-mkd-field">
+                  <label htmlFor={`chf-mkd-rate-${ownerKey}`}>
+                    Kursi CHF → MKD (1 CHF sa denarë)
+                  </label>
+                  <input
+                    id={`chf-mkd-rate-${ownerKey}`}
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="68"
+                    value={chfMkdRateInput}
+                    onChange={(e) => setChfMkdRateInput(e.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ledger-pagination-toggle excel-export-btn"
+                onClick={exportWithdrawals}
+              >
+                Eksporto Excel
+              </button>
+              <button
+                type="button"
+                className="ledger-pagination-toggle"
+                aria-pressed={paginationEnabled}
+                onClick={() => {
+                  togglePagination();
+                  setTablePage(1);
+                }}
+              >
+                {paginationEnabled ? "Scroll" : "Faqe"}
+              </button>
+            </div>
           </div>
 
           <div className="dashboard-ledger">

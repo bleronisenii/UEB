@@ -6,6 +6,15 @@ export function activityEventsToRows(events: ActivityEventParsed[]): MoneyTimeli
 }
 
 function activityToRow(ev: ActivityEventParsed): MoneyTimelineRow {
+  const amountEur =
+    typeof ev.amountEur === "number" && Number.isFinite(ev.amountEur)
+      ? ev.amountEur
+      : ev.amount;
+  const previousAmountEur =
+    typeof ev.previousAmountEur === "number" &&
+    Number.isFinite(ev.previousAmountEur)
+      ? ev.previousAmountEur
+      : ev.previousAmount;
   return {
     id: ev.id,
     kind: ev.stream === "income" ? "income" : "expense",
@@ -13,9 +22,13 @@ function activityToRow(ev: ActivityEventParsed): MoneyTimelineRow {
     ownerKey: ev.stream === "expense" ? ev.ownerKey : null,
     client: ev.client,
     amount: ev.amount,
+    currency: ev.currency,
+    amountEur,
     date: ev.date,
     budgetDelta: ev.budgetDelta,
     previousClient: ev.previousClient,
     previousAmount: ev.previousAmount,
+    previousCurrency: ev.previousCurrency,
+    previousAmountEur,
   };
 }

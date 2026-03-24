@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 function getAuthErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
@@ -105,6 +106,9 @@ export default function LoginPage() {
     <div className="login-page" id="container">
       <div id="left-container">
         <div className="card">
+          <div className="login-page-toolbar">
+            <ThemeToggle />
+          </div>
           <h1>{mode === "login" ? "Hyrje" : "Regjistrohu"}</h1>
 
           <form onSubmit={handleSubmit}>
