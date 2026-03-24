@@ -1,5 +1,7 @@
 "use client";
 
+/** Historiku: budget activity timeline; narrow layout uses cards (and short landscape viewports). */
+
 import { useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
