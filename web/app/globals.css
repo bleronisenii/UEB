@@ -338,12 +338,12 @@ td.client {
 #container.app-viewport-lock {
   display: flex;
   align-items: stretch;
-  min-height: 100dvh;
   min-height: 100vh;
-  height: 100dvh;
+  min-height: 100dvh;
   height: 100vh;
-  max-height: 100dvh;
+  height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -433,7 +433,7 @@ td.client {
   border-radius: 10px;
   font-size: 14px;
   margin-left: 20px;
-  margin-top: 40px;
+  margin-top: 20px;
   border: none;
   background: #f44336;
   color: white;
@@ -451,7 +451,7 @@ button.ledger-pagination-toggle {
   border: 1px solid #ccc;
   padding: 8px 14px;
   margin-right: 20px;
-  margin-top: 40px;
+  margin-top: 20px;
   border-radius: 10px;
   background: #fafafa;
   color: #111;
@@ -572,6 +572,37 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
 }
 
 @media (max-width: 600px) {
+  #container.app-viewport-lock {
+    min-height: 100svh;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  #container.app-viewport-lock #left-container,
+  #container.app-viewport-lock #right-container,
+  #container.app-viewport-lock #dashboard,
+  #container.app-viewport-lock #dashboard .dashboard-ledger,
+  #container.app-viewport-lock #dashboard .ledger-table-wrap,
+  #container.app-viewport-lock #dashboard .ledger-table-wrap--scroll,
+  #container.app-viewport-lock #dashboard .ledger-table-wrap--scroll .ledger-table-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  #left-container .dashboard-column-toolbar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  #left-container .dashboard-toolbar-signout,
+  button.ledger-pagination-toggle {
+    margin: 0;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
   .card {
     padding: 20px;
   }
