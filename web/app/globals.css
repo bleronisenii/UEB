@@ -148,6 +148,13 @@ body {
   margin-bottom: 20px;
 }
 
+.filter-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* Match any filter field id (e.g. filterInput, filterInput-urim) — must not rely on #filterInput only */
 #filter-container input[type="text"] {
   box-sizing: border-box;
@@ -160,6 +167,143 @@ body {
   background: #fafafa;
   color: #111;
   transition: all 0.2s ease;
+}
+
+#filter-container .filter-actions-row input[type="text"] {
+  flex: 1 1 320px;
+}
+
+#filter-container .filter-actions-row .ledger-pagination-toggle {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.eur-mkd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 7.5rem;
+}
+
+.eur-mkd-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.2;
+}
+
+.currency-rates-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+#filter-container .filter-actions-row .eur-mkd-field input[type="number"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 5.75rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+  background: #fafafa;
+  color: #111;
+}
+
+#filter-container .filter-actions-row .eur-mkd-field input[type="number"]:focus {
+  outline: none;
+  border-color: #2196f3;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.amount-currency-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.amount-currency-row input[type="number"] {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.ledger-currency-select {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+  background: #fafafa;
+  color: #111;
+}
+
+/* EUR + MKD dual display (global rate from EurMkdRateProvider) */
+.amount-eur-mkd {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.amount-eur-mkd .amount-eur {
+  font-weight: inherit;
+}
+
+.amount-eur-mkd .amount-mkd {
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+}
+
+.amount-eur-mkd--compact .amount-mkd {
+  font-size: 11px;
+}
+
+/* Non-EUR ledger cells: stack EUR + MKD lines (avoid inline text collision) */
+.ledger-row-amount-equiv {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.ledger-row-amount-equiv .amount-eur {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ledger-row-amount-equiv .amount-mkd {
+  font-size: 11px;
+  font-weight: 600;
+  color: #444;
+}
+
+#status .box p .amount-eur-mkd .amount-mkd {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.form-group .amount-mkd-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+td.amount .amount-mkd-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
 }
 
 #filter-container input[type="text"]:focus {
@@ -227,6 +371,93 @@ td.history-empty {
 .history-budget-neg {
   color: #c62828;
   font-weight: 600;
+}
+
+/* Historiku: one card per row on narrow viewports (see HistoryView) */
+.history-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-entry-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fafafa;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.history-entry-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.history-entry-card__header time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #222;
+}
+
+.history-entry-card__kind {
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  line-height: 1.35;
+  text-align: right;
+  max-width: 100%;
+}
+
+.history-entry-card__fields {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-entry-card__row {
+  display: grid;
+  grid-template-columns: minmax(0, 6.25rem) minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: start;
+}
+
+.history-entry-card__row dt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  line-height: 1.35;
+}
+
+.history-entry-card__row dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #111;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.history-entry-card__amount .amount-eur-mkd {
+  align-items: flex-start;
+}
+
+.history-empty--card {
+  margin: 0;
+  padding: 24px 16px;
+  border-radius: 12px;
+  background: #f5f5f5;
+  text-align: center;
+  color: #666;
+  font-size: 15px;
 }
 
 /* -------- STATUS -------- */
@@ -472,6 +703,19 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
   border-color: #2196f3;
 }
 
+button.excel-export-btn {
+  background: #1f9d55;
+  border-color: #18864a;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(31, 157, 85, 0.25);
+}
+
+button.excel-export-btn:hover {
+  background: #178147;
+  border-color: #106a3a;
+}
+
 /* -------- ACTION BUTTONS -------- */
 .actions {
   display: flex;
@@ -566,8 +810,53 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
   .card {
     width: 90%;
   }
+  /* Align Dil toolbar with the centered card (same width / horizontal inset) */
+  #left-container .dashboard-column-toolbar {
+    width: 90%;
+    max-width: 100%;
+    align-self: center;
+    box-sizing: border-box;
+  }
+  #left-container .dashboard-toolbar-signout {
+    margin-left: 0;
+    margin-top: 0;
+  }
   #container:not(.app-viewport-lock) #dashboard {
     height: auto;
+  }
+
+  /* Ledger tables: horizontal scroll on the wrapper (phones + tablets) */
+  #container.app-viewport-lock #dashboard .dashboard-ledger {
+    min-width: 0;
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+  .dashboard-ledger .ledger-table-wrap,
+  .dashboard-ledger .ledger-table-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    width: 100%;
+    max-width: 100%;
+  }
+  .dashboard-ledger table.ledger-data-table {
+    display: table;
+    width: max-content;
+    min-width: max(100%, 640px);
+    max-width: none;
+    border-collapse: collapse;
+    white-space: normal;
+    table-layout: auto;
+  }
+  .dashboard-ledger table.ledger-data-table th,
+  .dashboard-ledger table.ledger-data-table td {
+    vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-ledger table.ledger-data-table td.amount {
+    min-width: 10.5rem;
   }
 }
 
@@ -579,15 +868,68 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
     overflow: visible;
   }
 
+  /* Let the page grow vertically; do NOT set overflow:visible on ledger wrappers — it kills horizontal scroll. */
   #container.app-viewport-lock #left-container,
   #container.app-viewport-lock #right-container,
-  #container.app-viewport-lock #dashboard,
-  #container.app-viewport-lock #dashboard .dashboard-ledger,
-  #container.app-viewport-lock #dashboard .ledger-table-wrap,
-  #container.app-viewport-lock #dashboard .ledger-table-wrap--scroll,
-  #container.app-viewport-lock #dashboard .ledger-table-wrap--scroll .ledger-table-scroll {
+  #container.app-viewport-lock #dashboard {
     max-height: none;
     overflow: visible;
+  }
+
+  /* Override desktop flex clip so inner .ledger-table-wrap can be the x-scrollport */
+  #container.app-viewport-lock #dashboard .dashboard-ledger {
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /*
+   * Mobile ledger: show ~6 data rows + header, then vertical (and horizontal) scroll.
+   * Estimates: thead ~2.75rem, ~3.75rem per row (padding + dual-line amounts).
+   */
+  #container.app-viewport-lock #dashboard {
+    --ledger-mobile-body-rows: 6;
+    --ledger-mobile-thead-h: 2.75rem;
+    --ledger-mobile-row-h: 3.75rem;
+    --ledger-mobile-table-max-h: calc(
+      var(--ledger-mobile-thead-h) +
+        var(--ledger-mobile-body-rows) * var(--ledger-mobile-row-h)
+    );
+  }
+
+  /* Faqe (pagination): single wrapper scrolls x + y */
+  #container.app-viewport-lock #dashboard .ledger-table-wrap:not(.ledger-table-wrap--scroll) {
+    max-height: var(--ledger-mobile-table-max-h);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  /* Scroll mode: outer clips height; inner pane scrolls */
+  #container.app-viewport-lock #dashboard .ledger-table-wrap.ledger-table-wrap--scroll {
+    display: flex;
+    flex-direction: column;
+    max-height: var(--ledger-mobile-table-max-h);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #container.app-viewport-lock #dashboard .ledger-table-wrap--scroll .ledger-table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  #container.app-viewport-lock #dashboard .ledger-data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f1f1f1;
+    box-shadow: 0 1px 0 #ddd;
   }
 
   #left-container .dashboard-column-toolbar {
@@ -601,6 +943,67 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
     margin: 0;
     font-size: 13px;
     padding: 8px 12px;
+  }
+
+  /* Filter row: full-width search, full-width rate card (matches input styling), two action buttons */
+  #filter-container .filter-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  #filter-container .filter-actions-row > input[type="text"] {
+    grid-column: 1 / -1;
+    flex: none;
+    width: 100%;
+  }
+
+  #filter-container .filter-actions-row > .currency-rates-block {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  #filter-container .filter-actions-row > .currency-rates-block > .eur-mkd-field {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+    box-sizing: border-box;
+  }
+
+  #filter-container .filter-actions-row > .currency-rates-block > .eur-mkd-field label {
+    text-align: center;
+  }
+
+  #filter-container .filter-actions-row > .currency-rates-block > .eur-mkd-field input[type="number"] {
+    max-width: none;
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+  }
+
+  #filter-container .filter-actions-row > button.excel-export-btn {
+    grid-column: 1;
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  #filter-container .filter-actions-row > button.ledger-pagination-toggle:not(.excel-export-btn) {
+    grid-column: 2;
+    width: 100%;
+    justify-self: stretch;
   }
 
   .card {
@@ -626,16 +1029,6 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
   #status {
     flex-direction: column;
   }
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-  .ledger-table-wrap--scroll table,
-  .ledger-table-scroll table {
-    display: table;
-    white-space: normal;
-  }
   #buttons {
     flex-direction: column;
     align-items: stretch;
@@ -647,17 +1040,18 @@ button.ledger-pagination-toggle[aria-pressed="true"] {
     text-align: left;
     align-self: flex-start;
   }
+  /* Match desktop nav button styling (red, not orange) */
   #buttons button {
     flex: none;
     width: 100%;
     font-size: 16px;
     padding: 12px 16px;
-    border-radius: 999px;
-    background: #ff9800;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+    background: #f44336;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
   }
   #buttons button:hover {
-    background: #f57c00;
+    background: #c32b1d;
     transform: none;
   }
 }
@@ -685,6 +1079,12 @@ h1{
 /* Login: single column using existing #left-container / .card */
 .login-page #left-container {
   width: 100%;
+}
+
+.login-page-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .login-toggle {
@@ -763,4 +1163,417 @@ h1{
   .table-pagination-actions {
     justify-content: center;
   }
+}
+
+/* -------- Reports (monthly / yearly summaries) -------- */
+.reports-summary-toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.reports-mode-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.reports-mode--active {
+  background: #1565c0 !important;
+  color: #fff !important;
+}
+
+.reports-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.reports-summary-table th,
+.reports-summary-table td {
+  border: 1px solid #ddd;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.reports-summary-table th {
+  background: #f0f4f8;
+  font-weight: 600;
+}
+
+.reports-summary-empty {
+  text-align: center;
+  color: #666;
+  padding: 24px !important;
+}
+
+.reports-net-pos {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.reports-net-neg {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.theme-toggle-btn {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.theme-toggle-btn:hover {
+  background: #fff;
+  border-color: #2196f3;
+}
+
+/* -------- Dark mode (html.dark) — full panel + tables dark (match reference UI) -------- */
+html.dark body {
+  background: #121212;
+  color: #ffffff;
+}
+
+html.dark .card {
+  background: #151821;
+  color: #ffffff;
+  border: 1px solid #2a2f3a;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+html.dark .card h1 {
+  color: #ffffff;
+}
+
+html.dark .form-group label {
+  color: #a0a0a0;
+}
+
+html.dark #right-container {
+  background: transparent;
+}
+
+/* Main content was `background: white` — this is what caused the “white island” */
+html.dark #dashboard {
+  background: #121212;
+  color: #ffffff;
+  border: 1px solid #2a2a2a;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Status cards: solid accent blocks, reference-style */
+html.dark .box {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .box.green {
+  background: #1b5e20;
+}
+
+html.dark .box.red {
+  background: #b71c1c;
+}
+
+html.dark .box.blue {
+  background: #1565c0;
+}
+
+html.dark .box.green,
+html.dark .box.red,
+html.dark .box.blue {
+  color: #ffffff;
+}
+
+html.dark .box h3,
+html.dark .box p {
+  color: #ffffff;
+}
+
+/* Tables: dark header + rows (override global th #f1f1f1) */
+html.dark table th {
+  background: #1e1e1e;
+  color: #ffffff;
+  border-bottom-color: #333333;
+  font-weight: 700;
+}
+
+html.dark table td {
+  background: #121212;
+  color: #ffffff;
+  border-bottom-color: #2a2a2a;
+}
+
+html.dark .ledger-table-scroll thead th {
+  background: #1e1e1e;
+  color: #ffffff;
+  border-bottom-color: #333333;
+}
+
+html.dark .dashboard-ledger table.ledger-data-table tbody tr:nth-child(even) td {
+  background: #161616;
+}
+
+html.dark #container.app-viewport-lock #dashboard .ledger-data-table thead th {
+  background: #1e1e1e;
+  color: #ffffff;
+  box-shadow: 0 1px 0 #333333;
+}
+
+html.dark .amount-eur-mkd .amount-mkd,
+html.dark .ledger-row-amount-equiv .amount-mkd {
+  color: #a0a0a0;
+}
+
+html.dark td.amount .amount-mkd-sub {
+  color: #a0a0a0;
+}
+
+html.dark #filter-container input[type="text"],
+html.dark #filter-container select,
+html.dark .filter-actions-row input[type="text"] {
+  background: #252936;
+  border: 1px solid #3d4554;
+  color: #ffffff;
+}
+
+html.dark #filter-container input[type="text"]::placeholder {
+  color: #a0a0a0;
+}
+
+html.dark #filter-container .filter-actions-row .eur-mkd-field input[type="number"],
+html.dark #filter-container .filter-actions-row .currency-rates-block > .eur-mkd-field input[type="number"] {
+  background: #252936;
+  border-color: #3d4554;
+  color: #ffffff;
+}
+
+html.dark #filter-container .filter-actions-row .eur-mkd-field input[type="number"]:focus {
+  background: #2c3140;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+}
+
+html.dark .eur-mkd-field label {
+  color: #a0a0a0;
+}
+
+html.dark .history-data-table th,
+html.dark .history-data-table td,
+html.dark .reports-summary-table th,
+html.dark .reports-summary-table td {
+  border-color: #333333;
+}
+
+html.dark .history-data-table thead th,
+html.dark .reports-summary-table th {
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+html.dark .history-data-table tbody td {
+  background: #121212;
+  color: #ffffff;
+}
+
+html.dark .history-data-table tbody tr:nth-child(even) td {
+  background: #161616;
+}
+
+html.dark .reports-summary-table tbody td {
+  background: #121212;
+}
+
+html.dark .reports-summary-table tbody tr:nth-child(even) td {
+  background: #161616;
+}
+
+/* Bottom nav: deep red buttons (reference), not grey */
+html.dark #buttons button {
+  background: #9a1520;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+html.dark #buttons button:hover {
+  background: #c62828;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+html.dark #buttons > h3 {
+  color: #ffffff;
+}
+
+/* Toolbar + pagination: dark controls; Excel stays blue */
+html.dark .ledger-pagination-toggle {
+  background: #2a2a2a;
+  color: #ffffff;
+  border: 1px solid #404040;
+}
+
+html.dark .ledger-pagination-toggle:hover {
+  background: #363636;
+  border-color: #555555;
+}
+
+html.dark .ledger-pagination-toggle[aria-pressed="true"] {
+  background: #1e3a5f;
+  border-color: #2196f3;
+  color: #ffffff;
+}
+
+html.dark .ledger-pagination-toggle.excel-export-btn {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+}
+
+html.dark .ledger-pagination-toggle.excel-export-btn:hover {
+  background: #1976d2;
+  border-color: #1976d2;
+}
+
+html.dark .theme-toggle-btn {
+  background: #252936;
+  border: 1px solid #3d4554;
+  color: #ffffff;
+}
+
+html.dark .theme-toggle-btn:hover {
+  background: #2c3140;
+  border-color: #2196f3;
+}
+
+html.dark .reports-mode--active {
+  background: #1565c0 !important;
+  color: #fff !important;
+  border-color: #1565c0 !important;
+}
+
+html.dark .form-group input,
+html.dark .amount-currency-row input[type="number"] {
+  background: #252936;
+  border: 1px solid #3d4554;
+  color: #ffffff;
+}
+
+html.dark .ledger-currency-select {
+  background: #252936;
+  border: 1px solid #3d4554;
+  color: #ffffff;
+}
+
+html.dark #addBtn {
+  background: #2e7d32;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+html.dark #addBtn:hover {
+  background: #388e3c;
+}
+
+html.dark .edit-btn {
+  background: #1976d2;
+}
+
+html.dark .edit-btn:hover {
+  background: #2196f3;
+}
+
+html.dark .delete-btn {
+  background: #c62828;
+}
+
+html.dark .delete-btn:hover {
+  background: #e53935;
+}
+
+html.dark .table-pagination {
+  border-top-color: #333333;
+}
+
+html.dark .table-pagination-info,
+html.dark .table-pagination-page {
+  color: #a0a0a0;
+}
+
+html.dark .table-pagination-btn {
+  background: #1976d2;
+}
+
+html.dark .table-pagination-btn:hover:not(:disabled) {
+  background: #2196f3;
+}
+
+html.dark .history-entry-card {
+  background: #151821;
+  border: 1px solid #2a2f3a;
+  color: #ffffff;
+}
+
+html.dark .history-intro {
+  color: #a0a0a0;
+}
+
+html.dark .history-empty--card {
+  background: #1e1e1e;
+  color: #a0a0a0;
+}
+
+html.dark .history-empty {
+  color: #a0a0a0;
+}
+
+html.dark .reports-summary-empty {
+  color: #a0a0a0;
+}
+
+html.dark .reports-net-pos {
+  color: #81c784;
+}
+
+html.dark .reports-net-neg {
+  color: #ef9a9a;
+}
+
+html.dark .form-group .amount-mkd-hint {
+  color: #81c784;
+}
+
+html.dark #filter-container.history-filters select {
+  background: #252936;
+  border: 1px solid #3d4554;
+  color: #ffffff;
+}
+
+html.dark #filter-container.history-filters select:focus {
+  background: #2c3140;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+}
+
+html.dark #filter-container input[type="text"]:focus {
+  background: #2c3140;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+  color: #ffffff;
+}
+
+html.dark td.history-empty {
+  color: #a0a0a0;
+}
+
+html.dark .history-budget-pos {
+  color: #81c784;
+}
+
+html.dark .history-budget-neg {
+  color: #ef9a9a;
 }

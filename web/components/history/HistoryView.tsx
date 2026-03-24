@@ -3,17 +3,36 @@
 import { useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { getFirebaseAuth } from "@/lib/firebase";
 import {
   backfillActivityLogIfEmpty,
   subscribeActivityLog,
 } from "@/lib/firestore/activityLog";
-import { subscribeUserAppData } from "@/lib/firestore/userAppData";
+import { subscribeUserAppData, sumAllExpenses } from "@/lib/firestore/userAppData";
 import { activityEventsToRows } from "@/lib/history/activityToRows";
 import { TablePagination } from "@/components/pagination/TablePagination";
 import { useLedgerPaginationPreference } from "@/hooks/useLedgerPaginationPreference";
 import { useLedgerRowsPerView } from "@/hooks/useLedgerRowsPerView";
+import { AmountEurMkd } from "@/components/AmountEurMkd";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useEurMkdRate } from "@/contexts/EurMkdRateContext";
+import {
+  formatEur,
+  formatEurDelta,
+  formatMoneyAmount,
+  formatRate,
+} from "@/lib/formatMoney";
+import { amountToMkdDisplay, convertToEur } from "@/lib/currency";
+import { downloadExcelCsv } from "@/lib/export/excelCsv";
+import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey, UserAppData } from "@/types/userApp";
 import type { ActivityEventParsed } from "@/types/activityLog";
@@ -22,14 +41,30 @@ import type {
   MoneyTimelineOwnerFilter,
   MoneyTimelineRow,
 } from "@/types/history";
-import Link from "next/link";
 
 const OWNER_LABEL: Record<ExpenseOwnerKey, string> = {
   elvis: "Elvis",
   urim: "Urim",
   bunjamin: "Bunjamin",
-  puntoret: "Punëtorët",
+  puntoret: "UEB",
 };
+
+const HISTORY_MOBILE_MAX_PX = 640;
+
+function useNarrowHistoryLayout(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(
+        `(max-width: ${HISTORY_MOBILE_MAX_PX}px)`
+      );
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () =>
+      window.matchMedia(`(max-width: ${HISTORY_MOBILE_MAX_PX}px)`).matches,
+    () => false
+  );
+}
 
 type HistoryViewProps = {
   user: User;
@@ -49,9 +84,18 @@ export function HistoryView({ user }: HistoryViewProps) {
   const [filterInput, setFilterInput] = useState("");
   const [tablePage, setTablePage] = useState(1);
 
+  const {
+    rateInput,
+    setRateInput,
+    rate,
+    chfMkdRateInput,
+    setChfMkdRateInput,
+    chfMkdRate,
+  } = useEurMkdRate();
   const { paginationEnabled, togglePagination } = useLedgerPaginationPreference();
   const ledgerRows = useLedgerRowsPerView();
   const backfillOnce = useRef(false);
+  const narrowHistory = useNarrowHistoryLayout();
 
   useEffect(() => {
     const unsub = subscribeUserAppData(
@@ -111,6 +155,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         row.client.toLowerCase().includes(q) ||
         row.date.includes(q) ||
         String(row.amount).includes(q) ||
+        (row.currency?.toLowerCase().includes(q) ?? false) ||
         ownerPart.includes(q)
       );
     });
@@ -131,6 +176,188 @@ export function HistoryView({ user }: HistoryViewProps) {
     const start = (safeTablePage - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, paginationEnabled, safeTablePage, pageSize]);
+
+  const exportHistory = useCallback(() => {
+    if (filteredRows.length === 0) {
+      alert("Nuk ka të dhëna për eksport.");
+      return;
+    }
+
+    const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
+
+    const filteredIncomeTotal = filteredRows
+      .filter((row) => row.kind === "income")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const filteredExpenseTotal = filteredRows
+      .filter((row) => row.kind === "expense")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const totalBudget = appData?.totalBudget ?? 0;
+    const totalExpenses = appData ? sumAllExpenses(appData) : 0;
+    const remaining = totalBudget - totalExpenses;
+
+    const rows = [
+      [
+        { header: "Data", value: "Data" },
+        { header: "Lloji", value: "Lloji" },
+        { header: "Veprimi", value: "Veprimi" },
+        { header: "Pronari", value: "Pronari" },
+        { header: "Pershkrimi", value: "Përshkrimi" },
+        { header: "Shuma", value: "Shuma" },
+        { header: "ShumaMKD", value: "Shuma (MKD)" },
+        { header: "Ndikimi", value: "Ndikimi në buxhet" },
+      ],
+      ...filteredRows.map((row) => [
+        { header: "Data", value: row.date },
+        { header: "Lloji", value: kindCategory(row) },
+        { header: "Veprimi", value: veprimLabel(row) },
+        {
+          header: "Pronari",
+          value:
+            row.kind === "expense" && row.ownerKey != null
+              ? OWNER_LABEL[row.ownerKey]
+              : "—",
+        },
+        {
+          header: "Pershkrimi",
+          value:
+            row.action === "update" &&
+            row.previousClient != null &&
+            row.previousClient !== row.client
+              ? `${row.previousClient} -> ${row.client}`
+              : row.client,
+        },
+        {
+          header: "Shuma",
+          value: formatHistoryAmountExport(row),
+        },
+        {
+          header: "ShumaMKD",
+          value: formatMkd(
+            amountToMkdDisplay(
+              row.amount,
+              row.currency ?? "EUR",
+              rate,
+              chfMkdRate
+            )
+          ),
+        },
+        {
+          header: "Ndikimi",
+          value:
+            row.kind === "income" && row.budgetDelta != null
+              ? formatEurDelta(row.budgetDelta)
+              : "—",
+        },
+      ]),
+      [
+        { header: "Data", value: "" },
+        { header: "Lloji", value: "" },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: "" },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Përmbledhje" },
+        { header: "Lloji", value: "Vlera" },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: "" },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        {
+          header: "Data",
+          value: "Kursi i përdorur për konvertim (1 EUR = MKD)",
+        },
+        { header: "Lloji", value: String(rate) },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: "" },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        {
+          header: "Data",
+          value: "Kursi i përdorur për konvertim (1 CHF = MKD)",
+        },
+        { header: "Lloji", value: String(chfMkdRate) },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: "" },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Totali buxhetit (global)" },
+        { header: "Lloji", value: formatEur(totalBudget) },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: mkdFromEur(totalBudget) },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Totali daljeve (global)" },
+        { header: "Lloji", value: `${totalExpenses} €` },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: mkdFromEur(totalExpenses) },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Fitimi / Gjendja aktuale (global)" },
+        { header: "Lloji", value: formatEur(remaining) },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: mkdFromEur(remaining) },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Totali i të hyrave (rreshtat e eksportuar)" },
+        { header: "Lloji", value: `${filteredIncomeTotal} €` },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: mkdFromEur(filteredIncomeTotal) },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Totali i shpenzimeve (rreshtat e eksportuar)" },
+        { header: "Lloji", value: formatEur(filteredExpenseTotal) },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: mkdFromEur(filteredExpenseTotal) },
+        { header: "Ndikimi", value: "" },
+      ],
+      [
+        { header: "Data", value: "Numri i rreshtave të eksportuar" },
+        { header: "Lloji", value: filteredRows.length },
+        { header: "Veprimi", value: "" },
+        { header: "Pronari", value: "" },
+        { header: "Pershkrimi", value: "" },
+        { header: "Shuma", value: "" },
+        { header: "ShumaMKD", value: "" },
+        { header: "Ndikimi", value: "" },
+      ],
+    ];
+    downloadExcelCsv("historiku-export", rows);
+  }, [appData, filteredRows, rate, chfMkdRate]);
 
   const onKindChange = useCallback((v: MoneyTimelineKindFilter) => {
     setKindFilter(v);
@@ -174,7 +401,7 @@ export function HistoryView({ user }: HistoryViewProps) {
   }
 
   const ledgerTable = (
-    <table>
+    <table className="history-data-table">
       <thead>
         <tr>
           <th>Data</th>
@@ -182,7 +409,7 @@ export function HistoryView({ user }: HistoryViewProps) {
           <th>Veprimi</th>
           <th>Pronari</th>
           <th>Përshkrimi</th>
-          <th>Shuma</th>
+          <th>Shuma (€ / MKD / CHF)</th>
           <th>Ndikimi në buxhet</th>
         </tr>
       </thead>
@@ -196,11 +423,28 @@ export function HistoryView({ user }: HistoryViewProps) {
             </td>
           </tr>
         ) : (
-          displayRows.map((row) => <HistoryRow key={row.id} row={row} />)
+          displayRows.map((row) => (
+            <HistoryEntry key={row.id} row={row} layout="table" />
+          ))
         )}
       </tbody>
     </table>
   );
+
+  const historyMobileCards =
+    filteredRows.length === 0 ? (
+      <p className="history-empty--card">
+        {allRows.length === 0
+          ? "Nuk ka aktivitet të regjistruar ende."
+          : "Nuk ka rreshta që përputhen me filtrat."}
+      </p>
+    ) : (
+      <div className="history-card-stack">
+        {displayRows.map((row) => (
+          <HistoryEntry key={row.id} row={row} layout="card" />
+        ))}
+      </div>
+    );
 
   return (
     <div id="container" className="app-viewport-lock">
@@ -213,17 +457,7 @@ export function HistoryView({ user }: HistoryViewProps) {
           >
             Dil
           </button>
-          <button
-            type="button"
-            className="ledger-pagination-toggle"
-            aria-pressed={paginationEnabled}
-            onClick={() => {
-              togglePagination();
-              setTablePage(1);
-            }}
-          >
-            {paginationEnabled ? "Pamje me scroll" : "Ndarë në faqe"}
-          </button>
+          <ThemeToggle />
         </div>
         <div className="card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -238,9 +472,17 @@ export function HistoryView({ user }: HistoryViewProps) {
             type="button"
             onClick={() => router.push("/dashboard")}
             className="ledger-pagination-toggle"
-            style={{ display: "block", margin: "0 auto" }}
+            style={{ display: "block", margin: "0 auto 8px" }}
           >
             Kthehu në Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/reports")}
+            className="ledger-pagination-toggle"
+            style={{ display: "block", margin: "0 auto" }}
+          >
+            Përmbledhje
           </button>
         </div>
       </div>
@@ -283,35 +525,89 @@ export function HistoryView({ user }: HistoryViewProps) {
                 ))}
               </select>
             </div>
-            <label htmlFor="history-search" className="sr-only">
-              Kërko
-            </label>
-            <input
-              type="text"
-              id="history-search"
-              placeholder="Kërko sipas përshkrimit, datës ose shumës…"
-              value={filterInput}
-              onChange={(e) => {
-                setFilterInput(e.target.value);
-                setTablePage(1);
-              }}
-            />
+            <div className="filter-actions-row">
+              <label htmlFor="history-search" className="sr-only">
+                Kërko
+              </label>
+              <input
+                type="text"
+                id="history-search"
+                placeholder="Kërko sipas përshkrimit, datës ose shumës…"
+                value={filterInput}
+                onChange={(e) => {
+                  setFilterInput(e.target.value);
+                  setTablePage(1);
+                }}
+              />
+              <div className="currency-rates-block">
+                <div className="eur-mkd-field">
+                  <label htmlFor="eur-mkd-rate-history">
+                    Kursi EUR → MKD (1 € sa denarë)
+                  </label>
+                  <input
+                    id="eur-mkd-rate-history"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="61.5"
+                    value={rateInput}
+                    onChange={(e) => setRateInput(e.target.value)}
+                  />
+                </div>
+                <div className="eur-mkd-field">
+                  <label htmlFor="chf-mkd-rate-history">
+                    Kursi CHF → MKD (1 CHF sa denarë)
+                  </label>
+                  <input
+                    id="chf-mkd-rate-history"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="68"
+                    value={chfMkdRateInput}
+                    onChange={(e) => setChfMkdRateInput(e.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ledger-pagination-toggle excel-export-btn"
+                onClick={exportHistory}
+              >
+                Eksporto Excel
+              </button>
+              <button
+                type="button"
+                className="ledger-pagination-toggle"
+                aria-pressed={paginationEnabled}
+                onClick={() => {
+                  togglePagination();
+                  setTablePage(1);
+                }}
+              >
+                {paginationEnabled ? "Scroll" : "Faqe"}
+              </button>
+            </div>
           </div>
 
-          <div className="dashboard-ledger">
-            <div
-              className={
-                paginationEnabled
-                  ? "ledger-table-wrap"
-                  : "ledger-table-wrap ledger-table-wrap--scroll"
-              }
-            >
-              {paginationEnabled ? (
-                ledgerTable
-              ) : (
-                <div className="ledger-table-scroll">{ledgerTable}</div>
-              )}
-            </div>
+          <div className="dashboard-ledger history-ledger">
+            {narrowHistory ? (
+              historyMobileCards
+            ) : (
+              <div
+                className={
+                  paginationEnabled
+                    ? "ledger-table-wrap"
+                    : "ledger-table-wrap ledger-table-wrap--scroll"
+                }
+              >
+                {paginationEnabled ? (
+                  ledgerTable
+                ) : (
+                  <div className="ledger-table-scroll">{ledgerTable}</div>
+                )}
+              </div>
+            )}
 
             {paginationEnabled ? (
               <TablePagination
@@ -360,18 +656,36 @@ function veprimLabel(row: MoneyTimelineRow): string {
   return "Ndryshim shpenzimi";
 }
 
-function HistoryRow({ row }: { row: MoneyTimelineRow }) {
+function timelineRowEur(row: MoneyTimelineRow): number {
+  return row.amountEur ?? row.amount;
+}
+
+function formatHistoryAmountExport(row: MoneyTimelineRow): string {
+  const cur = row.currency ?? "EUR";
+  const prevCur = row.previousCurrency ?? cur;
+  if (
+    row.action === "update" &&
+    row.previousAmount != null &&
+    (row.previousAmount !== row.amount || prevCur !== cur)
+  ) {
+    return `${formatMoneyAmount(row.previousAmount)} ${prevCur} → ${formatMoneyAmount(row.amount)} ${cur}`;
+  }
+  return `${formatMoneyAmount(row.amount)} ${cur}`;
+}
+
+function HistoryEntry({
+  row,
+  layout,
+}: {
+  row: MoneyTimelineRow;
+  layout: "table" | "card";
+}) {
+  const { rate, chfMkdRate } = useEurMkdRate();
+
   const ownerLabel =
     row.kind === "expense" && row.ownerKey != null
       ? OWNER_LABEL[row.ownerKey]
       : "—";
-
-  const amountDisplay =
-    row.action === "update" &&
-    row.previousAmount != null &&
-    row.previousAmount !== row.amount
-      ? `${row.previousAmount} → ${row.amount}`
-      : String(row.amount);
 
   const clientDisplay =
     row.action === "update" &&
@@ -380,23 +694,107 @@ function HistoryRow({ row }: { row: MoneyTimelineRow }) {
       ? `${row.previousClient} → ${row.client}`
       : row.client;
 
+  const cur = row.currency ?? "EUR";
+  const eur = timelineRowEur(row);
+  const prevEur =
+    row.previousAmountEur ??
+    (row.previousAmount != null ? row.previousAmount : undefined);
+
+  const amountIsUpdate =
+    row.action === "update" &&
+    row.previousAmount != null &&
+    (row.previousAmount !== row.amount ||
+      (row.previousCurrency ?? "EUR") !== (row.currency ?? "EUR"));
+
   const budgetCell =
     row.kind === "income" && row.budgetDelta != null ? (
-      <span
-        className={
-          row.budgetDelta > 0
-            ? "history-budget-pos"
-            : row.budgetDelta < 0
-              ? "history-budget-neg"
-              : ""
-        }
-      >
-        {row.budgetDelta > 0 ? "+" : ""}
-        {row.budgetDelta} €
+      <span className="amount-eur-mkd amount-eur-mkd--compact">
+        <span
+          className={
+            row.budgetDelta > 0
+              ? "history-budget-pos"
+              : row.budgetDelta < 0
+                ? "history-budget-neg"
+                : ""
+          }
+        >
+          {formatEurDelta(row.budgetDelta)}
+        </span>
+        <span className="amount-mkd">
+          {formatMkd(eurToMkd(row.budgetDelta, rate))}
+        </span>
       </span>
     ) : (
       "—"
     );
+
+  const amountCell = amountIsUpdate ? (
+    <>
+      <div>
+        {formatMoneyAmount(row.previousAmount!)}{" "}
+        {row.previousCurrency ?? cur} → {formatMoneyAmount(row.amount)} {cur}
+      </div>
+      <div className="amount-mkd-sub">
+        {formatEur(prevEur!)} → {formatEur(eur)}
+      </div>
+      <div className="amount-mkd-sub">
+        {formatMkd(
+          amountToMkdDisplay(row.amount, cur, rate, chfMkdRate)
+        )}
+      </div>
+    </>
+  ) : cur === "EUR" ? (
+    <AmountEurMkd compact eur={eur} />
+  ) : (
+    <span className="amount-eur-mkd amount-eur-mkd--compact">
+      <span className="amount-eur">
+        {formatMoneyAmount(row.amount)} {cur}
+      </span>
+      <span className="amount-mkd">
+        <span className="amount-eur">
+          {formatEur(convertToEur(row.amount, cur, rate, chfMkdRate))}
+        </span>
+        <span className="amount-mkd">
+          {formatMkd(amountToMkdDisplay(row.amount, cur, rate, chfMkdRate))}
+        </span>
+      </span>
+    </span>
+  );
+
+  if (layout === "card") {
+    return (
+      <article className="history-entry-card">
+        <div className="history-entry-card__header">
+          <time dateTime={row.date}>{row.date}</time>
+          <span className="history-entry-card__kind">{kindCategory(row)}</span>
+        </div>
+        <dl className="history-entry-card__fields">
+          <div className="history-entry-card__row">
+            <dt>Veprimi</dt>
+            <dd>{veprimLabel(row)}</dd>
+          </div>
+          <div className="history-entry-card__row">
+            <dt>Pronari</dt>
+            <dd>{ownerLabel}</dd>
+          </div>
+          <div className="history-entry-card__row">
+            <dt>Përshkrimi</dt>
+            <dd>{clientDisplay}</dd>
+          </div>
+          <div className="history-entry-card__row">
+            <dt>Shuma</dt>
+            <dd className="history-entry-card__amount">{amountCell}</dd>
+          </div>
+          {row.kind === "income" ? (
+            <div className="history-entry-card__row">
+              <dt>Ndikimi në buxhet</dt>
+              <dd>{budgetCell}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </article>
+    );
+  }
 
   return (
     <tr>
@@ -405,7 +803,7 @@ function HistoryRow({ row }: { row: MoneyTimelineRow }) {
       <td>{veprimLabel(row)}</td>
       <td>{ownerLabel}</td>
       <td className="client">{clientDisplay}</td>
-      <td className="amount">{amountDisplay}</td>
+      <td className="amount">{amountCell}</td>
       <td className="history-budget-cell">{budgetCell}</td>
     </tr>
   );

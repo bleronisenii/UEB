@@ -21,6 +21,7 @@ import {
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey } from "@/types/userApp";
 import type { UserAppData } from "@/types/userApp";
+import { isLedgerCurrency, ledgerAmountEur } from "@/lib/currency";
 import type { ActivityEvent, ActivityEventParsed } from "@/types/activityLog";
 
 const ACTIVITY_PAGE_SIZE = 2000;
@@ -88,6 +89,19 @@ export function parseActivityDoc(
   }
   const client = typeof data.client === "string" ? data.client : "";
   const amount = typeof data.amount === "number" ? data.amount : 0;
+  const currency = isLedgerCurrency(data.currency) ? data.currency : undefined;
+  const amountEur =
+    typeof data.amountEur === "number" && !Number.isNaN(data.amountEur)
+      ? data.amountEur
+      : undefined;
+  const previousCurrency = isLedgerCurrency(data.previousCurrency)
+    ? data.previousCurrency
+    : undefined;
+  const previousAmountEur =
+    typeof data.previousAmountEur === "number" &&
+    !Number.isNaN(data.previousAmountEur)
+      ? data.previousAmountEur
+      : undefined;
   const date = typeof data.date === "string" ? data.date : "";
   const ownerKey =
     stream === "income"
@@ -105,11 +119,15 @@ export function parseActivityDoc(
     entryId: typeof data.entryId === "string" ? data.entryId : null,
     client,
     amount,
+    currency,
+    amountEur,
     date,
     previousClient:
       typeof data.previousClient === "string" ? data.previousClient : undefined,
     previousAmount:
       typeof data.previousAmount === "number" ? data.previousAmount : undefined,
+    previousCurrency,
+    previousAmountEur,
     budgetDelta:
       typeof data.budgetDelta === "number" ? data.budgetDelta : undefined,
     source: data.source === "backfill" ? "backfill" : undefined,
@@ -194,6 +212,8 @@ export async function backfillActivityLogIfEmpty(
       entryId: e.id ?? null,
       client: e.client,
       amount: e.amount,
+      currency: e.currency ?? "EUR",
+      amountEur: ledgerAmountEur(e),
       date: e.date,
       source: "backfill",
     });
@@ -208,6 +228,8 @@ export async function backfillActivityLogIfEmpty(
         entryId: e.id ?? null,
         client: e.client,
         amount: e.amount,
+        currency: e.currency ?? "EUR",
+        amountEur: ledgerAmountEur(e),
         date: e.date,
         source: "backfill",
       });
