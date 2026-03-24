@@ -242,9 +242,17 @@ export function ReportsView({ user }: ReportsViewProps) {
               >
                 Eksporto Excel
               </button>
+              <button
+                type="button"
+                className="ledger-pagination-toggle"
+                onClick={() => window.print()}
+              >
+                Printo
+              </button>
             </div>
           </div>
 
+          <h2 className="print-only-page-title">Përmbledhje</h2>
           <div className="dashboard-ledger">
             <div className="ledger-table-wrap">
               <table className="reports-summary-table">
