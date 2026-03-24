@@ -860,7 +860,9 @@ button.excel-export-btn:hover {
   }
 }
 
-@media (max-width: 600px) {
+/* Narrow phones + short viewports (e.g. phone landscape: width > 600px but height ~400px) */
+@media (max-width: 600px),
+  (max-width: 1024px) and (max-height: 560px) {
   #container.app-viewport-lock {
     min-height: 100svh;
     height: auto;
@@ -1154,7 +1156,8 @@ h1{
   cursor: not-allowed;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 600px),
+  (max-width: 1024px) and (max-height: 560px) {
   .table-pagination {
     flex-direction: column;
     align-items: stretch;
@@ -1515,7 +1518,32 @@ html.dark .table-pagination-btn:hover:not(:disabled) {
 html.dark .history-entry-card {
   background: #151821;
   border: 1px solid #2a2f3a;
-  color: #ffffff;
+  color: #f0f4f8;
+}
+
+/* Mobile Historiku cards: base rules used #111–#666 on children and beat inherited color */
+html.dark .history-entry-card__header {
+  border-bottom-color: #2a2f3a;
+}
+
+html.dark .history-entry-card__header time {
+  color: #e8edf4;
+}
+
+html.dark .history-entry-card__kind {
+  color: #b8c0d0;
+}
+
+html.dark .history-entry-card__row dt {
+  color: #9ca3b8;
+}
+
+html.dark .history-entry-card__row dd {
+  color: #f0f4f8;
+}
+
+html.dark .history-entry-card .amount-mkd-sub {
+  color: #a0a8b8;
 }
 
 html.dark .history-intro {
@@ -1576,4 +1604,139 @@ html.dark .history-budget-pos {
 
 html.dark .history-budget-neg {
   color: #ef9a9a;
+}
+
+/* -------- Print (Historiku, Përmbledhje: Printo button) -------- */
+.print-only-page-title {
+  display: none;
+}
+
+/* Screen: full table for print lives off-layout (Historiku mobile uses cards on screen). */
+.history-print-only {
+  display: none;
+}
+
+@media print {
+  .print-only-page-title {
+    display: block;
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #000;
+  }
+
+  #left-container,
+  .dashboard-column-toolbar,
+  #filter-container,
+  #buttons,
+  .table-pagination {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  #container.app-viewport-lock {
+    display: block !important;
+  }
+
+  #right-container {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  #dashboard {
+    background: #fff !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .dashboard-ledger {
+    overflow: visible !important;
+  }
+
+  /* Historiku: print compact table (Përmbledhje-style), not on-screen cards / paginated table */
+  .history-ledger .history-print-only {
+    display: block !important;
+  }
+
+  .history-ledger > .ledger-table-wrap,
+  .history-ledger .ledger-table-scroll,
+  .history-ledger .history-card-stack,
+  .history-ledger .history-empty--card {
+    display: none !important;
+  }
+
+  .ledger-table-wrap,
+  .ledger-table-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .history-data-table th,
+  .history-data-table td,
+  .reports-summary-table th,
+  .reports-summary-table td {
+    background: #fff !important;
+    color: #000 !important;
+    border-color: #ccc !important;
+  }
+
+  .history-data-table thead th,
+  .reports-summary-table thead th {
+    background: #f0f0f0 !important;
+  }
+
+  html.dark .history-data-table tbody tr:nth-child(even) td,
+  html.dark .reports-summary-table tbody tr:nth-child(even) td {
+    background: #f7f7f7 !important;
+  }
+
+  /* Historiku print table: dense rows, full width (match Përmbledhje print) */
+  .history-print-data-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 11px;
+    border-collapse: collapse;
+  }
+
+  .history-print-data-table th,
+  .history-print-data-table td {
+    padding: 6px 8px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .history-print-data-table .amount,
+  .history-print-data-table td.amount {
+    font-size: 10px;
+  }
+
+  .reports-summary-empty,
+  td.history-empty,
+  .history-empty--card {
+    color: #333 !important;
+  }
+
+  .reports-net-pos {
+    color: #1b5e20 !important;
+  }
+
+  .reports-net-neg {
+    color: #b71c1c !important;
+  }
+
+  .history-budget-pos {
+    color: #1b5e20 !important;
+  }
+
+  .history-budget-neg {
+    color: #b71c1c !important;
+  }
+
+  html.dark .amount-eur-mkd .amount-mkd {
+    color: #333 !important;
+  }
 }

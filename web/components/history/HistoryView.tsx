@@ -50,18 +50,34 @@ const OWNER_LABEL: Record<ExpenseOwnerKey, string> = {
 };
 
 const HISTORY_MOBILE_MAX_PX = 640;
+/** Match globals.css: phone landscape is often wider than 640px but very short — still use card layout. */
+const HISTORY_SHORT_VIEWPORT_MAX_PX = 560;
 
 function useNarrowHistoryLayout(): boolean {
   return useSyncExternalStore(
     (onChange) => {
-      const mq = window.matchMedia(
+      const mqNarrow = window.matchMedia(
         `(max-width: ${HISTORY_MOBILE_MAX_PX}px)`
       );
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
+      const mqShortViewport = window.matchMedia(
+        `(max-width: 1024px) and (max-height: ${HISTORY_SHORT_VIEWPORT_MAX_PX}px)`
+      );
+      mqNarrow.addEventListener("change", onChange);
+      mqShortViewport.addEventListener("change", onChange);
+      return () => {
+        mqNarrow.removeEventListener("change", onChange);
+        mqShortViewport.removeEventListener("change", onChange);
+      };
     },
-    () =>
-      window.matchMedia(`(max-width: ${HISTORY_MOBILE_MAX_PX}px)`).matches,
+    () => {
+      const narrow = window.matchMedia(
+        `(max-width: ${HISTORY_MOBILE_MAX_PX}px)`
+      ).matches;
+      const shortViewport = window.matchMedia(
+        `(max-width: 1024px) and (max-height: ${HISTORY_SHORT_VIEWPORT_MAX_PX}px)`
+      ).matches;
+      return narrow || shortViewport;
+    },
     () => false
   );
 }
@@ -431,6 +447,42 @@ export function HistoryView({ user }: HistoryViewProps) {
     </table>
   );
 
+  /** Full filtered list for print only — compact table like Përmbledhje (not mobile cards). */
+  const historyPrintTable = (
+    <table className="history-data-table history-print-data-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Lloji</th>
+          <th>Veprimi</th>
+          <th>Pronari</th>
+          <th>Përshkrimi</th>
+          <th>Shuma (€ / MKD / CHF)</th>
+          <th>Ndikimi në buxhet</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredRows.length === 0 ? (
+          <tr>
+            <td colSpan={7} className="history-empty">
+              {allRows.length === 0
+                ? "Nuk ka aktivitet të regjistruar ende."
+                : "Nuk ka rreshta që përputhen me filtrat."}
+            </td>
+          </tr>
+        ) : (
+          filteredRows.map((row) => (
+            <HistoryEntry
+              key={`print-${row.id}`}
+              row={row}
+              layout="table"
+            />
+          ))
+        )}
+      </tbody>
+    </table>
+  );
+
   const historyMobileCards =
     filteredRows.length === 0 ? (
       <p className="history-empty--card">
@@ -579,6 +631,13 @@ export function HistoryView({ user }: HistoryViewProps) {
               <button
                 type="button"
                 className="ledger-pagination-toggle"
+                onClick={() => window.print()}
+              >
+                Printo
+              </button>
+              <button
+                type="button"
+                className="ledger-pagination-toggle"
                 aria-pressed={paginationEnabled}
                 onClick={() => {
                   togglePagination();
@@ -590,7 +649,11 @@ export function HistoryView({ user }: HistoryViewProps) {
             </div>
           </div>
 
+          <h2 className="print-only-page-title">Historiku</h2>
           <div className="dashboard-ledger history-ledger">
+            <div className="history-print-only" aria-hidden="true">
+              {historyPrintTable}
+            </div>
             {narrowHistory ? (
               historyMobileCards
             ) : (
