@@ -9,7 +9,13 @@ import {
 import { getFirebaseFirestore } from "@/lib/firebase";
 import type { User } from "firebase/auth";
 import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
-import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
+import {
+  ORG_APP_DATA_DOC_ID,
+  ORG_APP_DATA_SUBCOLLECTION,
+  ORGS_COLLECTION,
+  USER_APP_DATA_COLLECTION,
+} from "@/lib/firestore/collections";
+import { getOrgId } from "@/lib/org";
 import {
   convertToEur,
   isLedgerCurrency,
@@ -32,6 +38,16 @@ function actorEmail(user: User): string | null {
 
 export function userAppDataRef(uid: string) {
   return doc(getFirebaseFirestore(), USER_APP_DATA_COLLECTION, uid);
+}
+
+export function orgUserAppDataRef(orgId: string) {
+  return doc(
+    getFirebaseFirestore(),
+    ORGS_COLLECTION,
+    orgId,
+    ORG_APP_DATA_SUBCOLLECTION,
+    ORG_APP_DATA_DOC_ID
+  );
 }
 
 export function createDefaultUserAppData(): UserAppData {
@@ -125,7 +141,7 @@ export function subscribeUserAppData(
   onData: (data: UserAppData) => void,
   onError: (err: Error) => void
 ): Unsubscribe {
-  const ref = userAppDataRef(user.uid);
+  const ref = orgUserAppDataRef(getOrgId());
   return onSnapshot(
     ref,
     (snap) => {
@@ -152,7 +168,8 @@ export async function addDashboardEntry(
   chfMkdRate: number,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   const id =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -179,7 +196,7 @@ export async function addDashboardEntry(
       : createDefaultUserAppData();
     data.dashboardEntries = [...data.dashboardEntries, entry];
     data.totalBudget += amountEur;
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "budget.add",
@@ -215,7 +232,8 @@ export async function deleteDashboardEntry(
   entry: LedgerEntry,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
@@ -245,7 +263,7 @@ export async function deleteDashboardEntry(
       );
     }
 
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "budget.delete",
@@ -274,7 +292,7 @@ export async function deleteDashboardEntry(
       budgetDelta: -removedEur,
     });
     for (const { owner, exp } of cascaded) {
-      appendActivityInTransaction(tx, user.uid, {
+      appendActivityInTransaction(tx, orgId, {
         actorEmail: actorEmail(user),
         auditSource,
         eventType: "expense.delete",
@@ -312,7 +330,8 @@ export async function updateDashboardEntry(
   chfMkdRate: number,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
@@ -351,7 +370,7 @@ export async function updateDashboardEntry(
     const prevEur = ledgerAmountEur(prev);
     const nextEur = ledgerAmountEur(next);
     const budgetDelta = nextEur - prevEur;
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "budget.edit",
@@ -416,7 +435,8 @@ export async function addExpenseEntry(
   chfMkdRate: number,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   const id =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -442,7 +462,7 @@ export async function addExpenseEntry(
       ? parseUserAppData(snap.data() as Record<string, unknown>)
       : createDefaultUserAppData();
     data.expenses[ownerKey] = [...data.expenses[ownerKey], entry];
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "expense.add",
@@ -479,7 +499,8 @@ export async function deleteExpenseEntry(
   entry: LedgerEntry,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
@@ -505,7 +526,7 @@ export async function deleteExpenseEntry(
               e.amount === entry.amount
             )
         );
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "expense.delete",
@@ -548,7 +569,8 @@ export async function updateExpenseEntry(
   chfMkdRate: number,
   auditSource: AuditSource
 ): Promise<void> {
-  const ref = userAppDataRef(user.uid);
+  const orgId = getOrgId();
+  const ref = orgUserAppDataRef(orgId);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
@@ -580,7 +602,7 @@ export async function updateExpenseEntry(
     data.expenses[ownerKey] = list;
     const prevEur = ledgerAmountEur(prev);
     const nextEur = ledgerAmountEur(next);
-    appendActivityInTransaction(tx, user.uid, {
+    appendActivityInTransaction(tx, orgId, {
       actorEmail: actorEmail(user),
       auditSource,
       eventType: "expense.edit",
