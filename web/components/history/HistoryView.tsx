@@ -74,6 +74,7 @@ function useNarrowHistoryLayout(): boolean {
       };
     },
     () => {
+      if (typeof window === "undefined") return false;
       const narrow = window.matchMedia(
         `(max-width: ${HISTORY_MOBILE_MAX_PX}px)`
       ).matches;
@@ -95,7 +96,16 @@ export function HistoryView({ user }: HistoryViewProps) {
   const [appData, setAppData] = useState<UserAppData | null>(null);
   const [events, setEvents] = useState<ActivityEventParsed[]>([]);
   const [ready, setReady] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Separate streams: one success must not clear the other's error (e.g. permissions). */
+  const [appDataError, setAppDataError] = useState<string | null>(null);
+  const [activityLogError, setActivityLogError] = useState<string | null>(null);
+
+  const loadError = useMemo(() => {
+    if (appDataError && activityLogError) {
+      return `${appDataError}; ${activityLogError}`;
+    }
+    return appDataError ?? activityLogError;
+  }, [appDataError, activityLogError]);
 
   const [kindFilter, setKindFilter] =
     useState<MoneyTimelineKindFilter>("all");
@@ -114,35 +124,55 @@ export function HistoryView({ user }: HistoryViewProps) {
   const narrowHistory = useNarrowHistoryLayout();
 
   useEffect(() => {
-    const unsub = subscribeUserAppData(
-      user,
-      (data) => {
-        setLoadError(null);
-        setAppData(data);
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = subscribeUserAppData(
+        user,
+        (data) => {
+          setAppDataError(null);
+          setAppData(data);
+          setReady(true);
+        },
+        (err) => {
+          setAppDataError(err.message);
+          setReady(true);
+        }
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      queueMicrotask(() => {
+        setAppDataError(msg);
         setReady(true);
-      },
-      (err) => {
-        setLoadError(err.message);
-        setReady(true);
-      }
-    );
-    return () => unsub();
+      });
+      return;
+    }
+    return () => unsub?.();
   }, [user]);
 
   useEffect(() => {
-    const unsub = subscribeActivityLog(
-      user,
-      (list) => {
-        setLoadError(null);
-        setEvents(list);
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = subscribeActivityLog(
+        user,
+        (list) => {
+          setActivityLogError(null);
+          setEvents(list);
+          setReady(true);
+        },
+        (err) => {
+          setActivityLogError(err.message);
+          setReady(true);
+        }
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      queueMicrotask(() => {
+        setActivityLogError(msg);
         setReady(true);
-      },
-      (err) => {
-        setLoadError(err.message);
-        setReady(true);
-      }
-    );
-    return () => unsub();
+      });
+      return;
+    }
+    return () => unsub?.();
   }, [user]);
 
   useEffect(() => {
@@ -452,11 +482,20 @@ export function HistoryView({ user }: HistoryViewProps) {
   }
 
   if (loadError) {
+    const permissionHint =
+      /permission|insufficient/i.test(loadError) ? (
+        <p className="history-error-hint">
+          Publikoni rregullat Firestore për{" "}
+          <code>{`orgs/{orgId}/userAppData/main`}</code> dhe{" "}
+          <code>activityLog</code> (shih <code>web/firestore.rules</code> në repo).
+        </p>
+      ) : null;
     return (
       <div id="container" className="app-viewport-lock">
         <div id="right-container">
           <div id="dashboard">
-            <p>{loadError}</p>
+            <p role="alert">{loadError}</p>
+            {permissionHint}
           </div>
         </div>
       </div>

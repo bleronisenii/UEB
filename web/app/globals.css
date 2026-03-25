@@ -352,6 +352,15 @@ td.amount .amount-mkd-sub {
   margin: 0 0 16px;
 }
 
+.history-error-hint {
+  margin-top: 0.75rem;
+  opacity: 0.9;
+}
+
+html.dark .history-error-hint {
+  color: #ccc;
+}
+
 td.history-empty {
   text-align: center;
   padding: 24px 16px;

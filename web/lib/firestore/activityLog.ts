@@ -16,10 +16,9 @@ import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase";
 import {
   ACTIVITY_LOG_SUBCOLLECTION,
-  ORG_APP_DATA_SUBCOLLECTION,
-  ORGS_COLLECTION,
   USER_APP_DATA_COLLECTION,
 } from "@/lib/firestore/collections";
+import { orgActivityLogCollectionRef } from "@/lib/firestore/orgRefs";
 import { getOrgId } from "@/lib/org";
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey } from "@/types/userApp";
@@ -42,20 +41,6 @@ export function activityLogCollectionRef(uid: string) {
     uid,
     ACTIVITY_LOG_SUBCOLLECTION
   );
-}
-
-export function orgActivityLogCollectionRef(orgId: string) {
-  return collection(
-    getFirebaseFirestore(),
-    ORGS_COLLECTION,
-    orgId,
-    ORG_APP_DATA_SUBCOLLECTION,
-    ACTIVITY_LOG_SUBCOLLECTION
-  );
-}
-
-function newActivityDocRef(uid: string) {
-  return doc(activityLogCollectionRef(uid));
 }
 
 function newOrgActivityDocRef(orgId: string) {

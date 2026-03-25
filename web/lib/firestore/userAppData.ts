@@ -9,12 +9,8 @@ import {
 import { getFirebaseFirestore } from "@/lib/firebase";
 import type { User } from "firebase/auth";
 import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
-import {
-  ORG_APP_DATA_DOC_ID,
-  ORG_APP_DATA_SUBCOLLECTION,
-  ORGS_COLLECTION,
-  USER_APP_DATA_COLLECTION,
-} from "@/lib/firestore/collections";
+import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
+import { orgMainAppDataDocRef } from "@/lib/firestore/orgRefs";
 import { getOrgId } from "@/lib/org";
 import {
   convertToEur,
@@ -41,13 +37,7 @@ export function userAppDataRef(uid: string) {
 }
 
 export function orgUserAppDataRef(orgId: string) {
-  return doc(
-    getFirebaseFirestore(),
-    ORGS_COLLECTION,
-    orgId,
-    ORG_APP_DATA_SUBCOLLECTION,
-    ORG_APP_DATA_DOC_ID
-  );
+  return orgMainAppDataDocRef(orgId);
 }
 
 export function createDefaultUserAppData(): UserAppData {

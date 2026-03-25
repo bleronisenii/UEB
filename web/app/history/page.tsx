@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { HistoryErrorBoundary } from "@/components/history/HistoryErrorBoundary";
 import { HistoryView } from "@/components/history/HistoryView";
 
 export default function HistoryPage() {
@@ -31,5 +32,9 @@ export default function HistoryPage() {
     return null;
   }
 
-  return <HistoryView user={user} />;
+  return (
+    <HistoryErrorBoundary>
+      <HistoryView user={user} />
+    </HistoryErrorBoundary>
+  );
 }
