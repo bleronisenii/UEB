@@ -31,6 +31,7 @@ import {
   formatEur,
   formatEurDelta,
   formatMoneyAmount,
+  formatRate,
 } from "@/lib/formatMoney";
 import { amountToMkdDisplay, convertToEur } from "@/lib/currency";
 import { ledgerAmountEurLive, sumLedgerEntriesEurLive } from "@/lib/currency";
@@ -104,11 +105,7 @@ export function HistoryView({ user }: HistoryViewProps) {
   const [tablePage, setTablePage] = useState(1);
 
   const {
-    rateInput,
-    setRateInput,
     rate,
-    chfMkdRateInput,
-    setChfMkdRateInput,
     chfMkdRate,
   } = useEurMkdRate();
   const { paginationEnabled, togglePagination } = useLedgerPaginationPreference();
@@ -195,6 +192,34 @@ export function HistoryView({ user }: HistoryViewProps) {
     const start = (safeTablePage - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, paginationEnabled, safeTablePage, pageSize]);
+
+  const currentRemainingMkdHistorical = useMemo(() => {
+    if (!appData) return 0;
+    const budgetMkd = appData.dashboardEntries.reduce(
+      (sum, e) => sum + (e.mkdValueAtEntry ?? 0),
+      0
+    );
+    const expensesMkd = Object.values(appData.expenses)
+      .flat()
+      .reduce((sum, e) => sum + (e.mkdValueAtEntry ?? 0), 0);
+    return budgetMkd - expensesMkd;
+  }, [appData]);
+
+  const { balanceBeforeById, balanceAfterById } = useMemo(() => {
+    // Compute remaining budget before/after each event.
+    // We start from current remaining (after all events) and walk backwards (newest -> oldest).
+    let after = currentRemainingMkdHistorical;
+    const beforeMap = new Map<string, number>();
+    const afterMap = new Map<string, number>();
+    for (const row of allRows) {
+      const impact = budgetImpactMkd(row);
+      const before = after - impact;
+      afterMap.set(row.id, after);
+      beforeMap.set(row.id, before);
+      after = before;
+    }
+    return { balanceBeforeById: beforeMap, balanceAfterById: afterMap };
+  }, [allRows, currentRemainingMkdHistorical]);
 
   const exportHistory = useCallback(() => {
     if (filteredRows.length === 0) {
@@ -395,65 +420,7 @@ export function HistoryView({ user }: HistoryViewProps) {
       currency: "EUR",
       date: new Date().toLocaleDateString(),
     }).catch(() => {});
-  }, [appData, filteredRows, rate, chfMkdRate]);
-
-  const prevRateRef = useRef<number | null>(null);
-  const prevChfRateRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (prevRateRef.current == null) {
-      prevRateRef.current = rate;
-      return;
-    }
-    const prev = prevRateRef.current;
-    if (prev !== rate) {
-      void logAuditEvent(user, {
-        actorEmail: user.email ?? null,
-        auditSource: "Historiku",
-        eventType: "rate.eur_mkd.change",
-        changeDetails: {
-          summary: `EUR→MKD changed from ${prev} to ${rate}`,
-          fields: { eurMkdRate: { from: prev, to: rate } },
-        },
-        action: "update",
-        stream: "income",
-        ownerKey: null,
-        entryId: null,
-        client: "EUR→MKD rate",
-        amount: rate,
-        currency: "MKD",
-        date: new Date().toLocaleDateString(),
-      }).catch(() => {});
-      prevRateRef.current = rate;
-    }
-  }, [rate, user]);
-
-  useEffect(() => {
-    if (prevChfRateRef.current == null) {
-      prevChfRateRef.current = chfMkdRate;
-      return;
-    }
-    const prev = prevChfRateRef.current;
-    if (prev !== chfMkdRate) {
-      void logAuditEvent(user, {
-        actorEmail: user.email ?? null,
-        auditSource: "Historiku",
-        eventType: "rate.chf_mkd.change",
-        changeDetails: {
-          summary: `CHF→MKD changed from ${prev} to ${chfMkdRate}`,
-          fields: { chfMkdRate: { from: prev, to: chfMkdRate } },
-        },
-        action: "update",
-        stream: "income",
-        ownerKey: null,
-        entryId: null,
-        client: "CHF→MKD rate",
-        amount: chfMkdRate,
-        currency: "MKD",
-        date: new Date().toLocaleDateString(),
-      }).catch(() => {});
-      prevChfRateRef.current = chfMkdRate;
-    }
-  }, [chfMkdRate, user]);
+  }, [appData, chfMkdRate, filteredRows, rate, user]);
 
   const onKindChange = useCallback((v: MoneyTimelineKindFilter) => {
     setKindFilter(v);
@@ -508,13 +475,15 @@ export function HistoryView({ user }: HistoryViewProps) {
           <th>Pronari</th>
           <th>Detaje</th>
           <th>Shuma (€ / MKD / CHF)</th>
+          <th>Gjendja para</th>
           <th>Ndikimi në buxhet</th>
+          <th>Gjendja pas</th>
         </tr>
       </thead>
       <tbody id="tableBody">
         {filteredRows.length === 0 ? (
           <tr>
-            <td colSpan={9} className="history-empty">
+            <td colSpan={11} className="history-empty">
               {allRows.length === 0
                 ? "Nuk ka aktivitet të regjistruar ende."
                 : "Nuk ka rreshta që përputhen me filtrat."}
@@ -522,7 +491,13 @@ export function HistoryView({ user }: HistoryViewProps) {
           </tr>
         ) : (
           displayRows.map((row) => (
-            <HistoryEntry key={row.id} row={row} layout="table" />
+            <HistoryEntry
+              key={row.id}
+              row={row}
+              layout="table"
+              balanceBeforeEur={balanceBeforeById.get(row.id) ?? null}
+              balanceAfterEur={balanceAfterById.get(row.id) ?? null}
+            />
           ))
         )}
       </tbody>
@@ -542,13 +517,15 @@ export function HistoryView({ user }: HistoryViewProps) {
           <th>Pronari</th>
           <th>Detaje</th>
           <th>Shuma (€ / MKD / CHF)</th>
+          <th>Gjendja para</th>
           <th>Ndikimi në buxhet</th>
+          <th>Gjendja pas</th>
         </tr>
       </thead>
       <tbody>
         {filteredRows.length === 0 ? (
           <tr>
-            <td colSpan={9} className="history-empty">
+            <td colSpan={11} className="history-empty">
               {allRows.length === 0
                 ? "Nuk ka aktivitet të regjistruar ende."
                 : "Nuk ka rreshta që përputhen me filtrat."}
@@ -560,6 +537,8 @@ export function HistoryView({ user }: HistoryViewProps) {
               key={`print-${row.id}`}
               row={row}
               layout="table"
+              balanceBeforeEur={balanceBeforeById.get(row.id) ?? null}
+              balanceAfterEur={balanceAfterById.get(row.id) ?? null}
             />
           ))
         )}
@@ -577,7 +556,13 @@ export function HistoryView({ user }: HistoryViewProps) {
     ) : (
       <div className="history-card-stack">
         {displayRows.map((row) => (
-          <HistoryEntry key={row.id} row={row} layout="card" />
+          <HistoryEntry
+            key={row.id}
+            row={row}
+            layout="card"
+            balanceBeforeEur={balanceBeforeById.get(row.id) ?? null}
+            balanceAfterEur={balanceAfterById.get(row.id) ?? null}
+          />
         ))}
       </div>
     );
@@ -603,23 +588,6 @@ export function HistoryView({ user }: HistoryViewProps) {
           <p className="history-intro">
           Këtu regjistrohet çdo veprim që lidhet me buxhetin dhe shpenzimet, përfshirë shtimet, fshirjet dhe ndryshimet.
           </p>
-
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="ledger-pagination-toggle"
-            style={{ display: "block", margin: "0 auto 8px" }}
-          >
-            Kthehu në Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/reports")}
-            className="ledger-pagination-toggle"
-            style={{ display: "block", margin: "0 auto" }}
-          >
-            Përmbledhje
-          </button>
         </div>
       </div>
 
@@ -675,36 +643,6 @@ export function HistoryView({ user }: HistoryViewProps) {
                   setTablePage(1);
                 }}
               />
-              <div className="currency-rates-block">
-                <div className="eur-mkd-field">
-                  <label htmlFor="eur-mkd-rate-history">
-                    Kursi EUR → MKD (1 € sa denarë)
-                  </label>
-                  <input
-                    id="eur-mkd-rate-history"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    placeholder="61.5"
-                    value={rateInput}
-                    onChange={(e) => setRateInput(e.target.value)}
-                  />
-                </div>
-                <div className="eur-mkd-field">
-                  <label htmlFor="chf-mkd-rate-history">
-                    Kursi CHF → MKD (1 CHF sa denarë)
-                  </label>
-                  <input
-                    id="chf-mkd-rate-history"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    placeholder="68"
-                    value={chfMkdRateInput}
-                    onChange={(e) => setChfMkdRateInput(e.target.value)}
-                  />
-                </div>
-              </div>
               <button
                 type="button"
                 className="ledger-pagination-toggle excel-export-btn"
@@ -788,6 +726,12 @@ export function HistoryView({ user }: HistoryViewProps) {
 
           <div id="buttons">
             <h3>Pagesat:</h3>
+            <button type="button" onClick={() => router.push("/dashboard")}>
+              Dashboard
+            </button>
+            <button type="button" onClick={() => router.push("/reports")}>
+              Përmbledhje
+            </button>
             <button type="button" onClick={() => router.push("/urim")}>
               Urim
             </button>
@@ -878,11 +822,33 @@ function detailsLabel(row: MoneyTimelineRow): string {
   return row.client || "—";
 }
 
+function budgetImpactMkd(row: MoneyTimelineRow): number {
+  const nextMkd =
+    typeof row.mkdValueAtEntry === "number" && Number.isFinite(row.mkdValueAtEntry)
+      ? row.mkdValueAtEntry
+      : 0;
+  const prevMkd =
+    typeof row.previousMkdValueAtEntry === "number" &&
+    Number.isFinite(row.previousMkdValueAtEntry)
+      ? row.previousMkdValueAtEntry
+      : 0;
+
+  if (row.kind === "income") {
+    if (row.action === "create") return nextMkd;
+    if (row.action === "delete") return -nextMkd;
+    return nextMkd - prevMkd;
+  }
+  if (row.action === "create") return -nextMkd;
+  if (row.action === "delete") return nextMkd;
+  return -(nextMkd - prevMkd);
+}
+
 function budgetImpactEur(
   row: MoneyTimelineRow,
   eurMkdRate: number,
   chfMkdRate: number
 ): number {
+  // Legacy fallback for rows missing locked MKD values.
   const cur = row.currency ?? "EUR";
   const nextEur = convertToEur(row.amount, cur, eurMkdRate, chfMkdRate);
   const prevCur = row.previousCurrency ?? cur;
@@ -917,9 +883,13 @@ function formatHistoryAmountExport(row: MoneyTimelineRow): string {
 function HistoryEntry({
   row,
   layout,
+  balanceBeforeEur,
+  balanceAfterEur,
 }: {
   row: MoneyTimelineRow;
   layout: "table" | "card";
+  balanceBeforeEur: number | null;
+  balanceAfterEur: number | null;
 }) {
   const { rate, chfMkdRate } = useEurMkdRate();
 
@@ -928,20 +898,20 @@ function HistoryEntry({
       ? OWNER_LABEL[row.ownerKey]
       : "—";
 
-  const clientDisplay =
-    row.action === "update" &&
-    row.previousClient != null &&
-    row.previousClient !== row.client
-      ? `${row.previousClient} → ${row.client}`
-      : row.client;
-
   const cur = row.currency ?? "EUR";
-  const eur = convertToEur(row.amount, cur, rate, chfMkdRate);
-  const prevCur = row.previousCurrency ?? cur;
-  const prevEur =
-    row.previousAmount != null
-      ? convertToEur(row.previousAmount, prevCur, rate, chfMkdRate)
-      : undefined;
+  const rateAtEntry =
+    typeof row.rateAtEntry === "number" && Number.isFinite(row.rateAtEntry)
+      ? row.rateAtEntry
+      : null;
+  const mkdAtEntry =
+    typeof row.mkdValueAtEntry === "number" && Number.isFinite(row.mkdValueAtEntry)
+      ? row.mkdValueAtEntry
+      : null;
+  const prevMkdAtEntry =
+    typeof row.previousMkdValueAtEntry === "number" &&
+    Number.isFinite(row.previousMkdValueAtEntry)
+      ? row.previousMkdValueAtEntry
+      : null;
 
   const amountIsUpdate =
     row.action === "update" &&
@@ -972,6 +942,20 @@ function HistoryEntry({
       "—"
     );
 
+  const balanceBeforeCell =
+    balanceBeforeEur == null ? (
+      "—"
+    ) : (
+      <AmountEurMkd compact eur={balanceBeforeEur} />
+    );
+
+  const balanceAfterCell =
+    balanceAfterEur == null ? (
+      "—"
+    ) : (
+      <AmountEurMkd compact eur={balanceAfterEur} />
+    );
+
   const amountCell = amountIsUpdate ? (
     <>
       <div>
@@ -979,27 +963,23 @@ function HistoryEntry({
         {row.previousCurrency ?? cur} → {formatMoneyAmount(row.amount)} {cur}
       </div>
       <div className="amount-mkd-sub">
-        {formatEur(prevEur!)} → {formatEur(eur)}
-      </div>
-      <div className="amount-mkd-sub">
-        {formatMkd(
-          amountToMkdDisplay(row.amount, cur, rate, chfMkdRate)
-        )}
+        {prevMkdAtEntry != null && mkdAtEntry != null
+          ? `${formatMkd(prevMkdAtEntry)} → ${formatMkd(mkdAtEntry)}`
+          : mkdAtEntry != null
+            ? formatMkd(mkdAtEntry)
+            : "Kurs i panjohur"}
+        {rateAtEntry != null ? ` · Kursi: ${formatRate(rateAtEntry)}` : ""}
       </div>
     </>
-  ) : cur === "EUR" ? (
-    <AmountEurMkd compact eur={eur} />
   ) : (
     <span className="amount-eur-mkd amount-eur-mkd--compact">
       <span className="amount-eur">
         {formatMoneyAmount(row.amount)} {cur}
       </span>
       <span className="amount-mkd">
-        <span className="amount-eur">
-          {formatEur(convertToEur(row.amount, cur, rate, chfMkdRate))}
-        </span>
         <span className="amount-mkd">
-          {formatMkd(amountToMkdDisplay(row.amount, cur, rate, chfMkdRate))}
+          {mkdAtEntry != null ? formatMkd(mkdAtEntry) : "Kurs i panjohur"}
+          {rateAtEntry != null ? ` · Kursi: ${formatRate(rateAtEntry)}` : ""}
         </span>
       </span>
     </span>
@@ -1041,6 +1021,14 @@ function HistoryEntry({
             <dt>Ndikimi në buxhet</dt>
             <dd>{budgetCell}</dd>
           </div>
+          <div className="history-entry-card__row">
+            <dt>Gjendja para</dt>
+            <dd>{balanceBeforeCell}</dd>
+          </div>
+          <div className="history-entry-card__row">
+            <dt>Gjendja pas</dt>
+            <dd>{balanceAfterCell}</dd>
+          </div>
         </dl>
       </article>
     );
@@ -1056,7 +1044,9 @@ function HistoryEntry({
       <td>{ownerLabel}</td>
       <td className="client">{detailsLabel(row)}</td>
       <td className="amount">{amountCell}</td>
+      <td className="history-budget-cell">{balanceBeforeCell}</td>
       <td className="history-budget-cell">{budgetCell}</td>
+      <td className="history-budget-cell">{balanceAfterCell}</td>
     </tr>
   );
 }

@@ -54,11 +54,17 @@ export type ActivityEvent = {
   currency?: LedgerCurrency;
   /** EUR equivalent (for display / MKD line). */
   amountEur?: number;
+  /** Locked currency→MKD rate used when this event was recorded. */
+  rateAtEntry?: number;
+  /** Locked MKD value at entry time (amount × rateAtEntry). */
+  mkdValueAtEntry?: number;
   date: string;
   previousClient?: string;
   previousAmount?: number;
   previousCurrency?: LedgerCurrency;
   previousAmountEur?: number;
+  previousRateAtEntry?: number;
+  previousMkdValueAtEntry?: number;
   /** Change to `totalBudget` for income stream (create/update/delete). */
   budgetDelta?: number;
   /** Set when row was synthesized from existing ledger (migration). */

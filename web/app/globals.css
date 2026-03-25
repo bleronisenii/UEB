@@ -645,11 +645,11 @@ td.client {
   }
 
   #container.app-viewport-lock #left-container {
-    width: 40%;
+    width: 31%;
   }
 
   #container.app-viewport-lock #right-container {
-    width: 60%;
+    width: 69%;
   }
 }
 
@@ -1639,11 +1639,17 @@ html.dark .history-budget-neg {
 
   #container.app-viewport-lock {
     display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   #right-container {
     width: 100% !important;
     max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   #dashboard {
@@ -1651,6 +1657,8 @@ html.dark .history-budget-neg {
     color: #000 !important;
     border: none !important;
     box-shadow: none !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   .dashboard-ledger {
@@ -1700,6 +1708,20 @@ html.dark .history-budget-neg {
     table-layout: fixed;
     font-size: 11px;
     border-collapse: collapse;
+  }
+
+  /* Ensure headers repeat and rows can paginate */
+  .history-print-data-table thead {
+    display: table-header-group;
+  }
+
+  .history-print-data-table tbody {
+    display: table-row-group;
+  }
+
+  .history-print-data-table tr {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .history-print-data-table th,

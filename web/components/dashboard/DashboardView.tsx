@@ -23,12 +23,17 @@ import {
 import { downloadExcelCsv } from "@/lib/export/excelCsv";
 import { parseLedgerAmountInput } from "@/lib/export/eurMkd";
 import { formatEur, formatRate } from "@/lib/formatMoney";
-import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
+import { formatMkd } from "@/lib/export/eurMkd";
 import { useEurMkdRate } from "@/contexts/EurMkdRateContext";
-import { amountToMkdDisplay } from "@/lib/currency";
-import { ledgerAmountEurLive, sumLedgerEntriesEurLive } from "@/lib/currency";
+import { ledgerAmountEur } from "@/lib/currency";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { logAuditEvent } from "@/lib/firestore/activityLog";
+import {
+  computeBalancesByCurrency,
+  historicalTotalEur,
+  historicalTotalMkd,
+  liveValuationMkd,
+} from "@/lib/balances";
 import type { LedgerCurrency, LedgerEntry, UserAppData } from "@/types/userApp";
 
 type DashboardViewProps = {
@@ -106,20 +111,38 @@ export function DashboardView({ user }: DashboardViewProps) {
     return filteredEntries.slice(start, start + pageSize);
   }, [filteredEntries, paginationEnabled, safeTablePage, pageSize]);
 
-  const totalBudget = useMemo(() => {
-    return appData ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate) : 0;
-  }, [appData, chfMkdRate, rate]);
-
-  const totalExpenses = useMemo(() => {
+  const historicalIncomeMkd = useMemo(() => {
     if (!appData) return 0;
-    // Recompute from raw amounts + currency so rate edits update totals instantly.
-    return Object.values(appData.expenses).flat().reduce(
-      (sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate),
-      0
-    );
+    return historicalTotalMkd(appData.dashboardEntries, { eurMkdRate: rate, chfMkdRate });
   }, [appData, chfMkdRate, rate]);
 
-  const remaining = totalBudget - totalExpenses;
+  const historicalIncomeEur = useMemo(() => {
+    if (!appData) return 0;
+    return historicalTotalEur(appData.dashboardEntries);
+  }, [appData]);
+
+  const historicalExpenseMkd = useMemo(() => {
+    if (!appData) return 0;
+    const all = Object.values(appData.expenses).flat();
+    return historicalTotalMkd(all, { eurMkdRate: rate, chfMkdRate });
+  }, [appData, chfMkdRate, rate]);
+
+  const historicalExpenseEur = useMemo(() => {
+    if (!appData) return 0;
+    const all = Object.values(appData.expenses).flat();
+    return historicalTotalEur(all);
+  }, [appData]);
+
+  const balances = useMemo(() => {
+    return appData ? computeBalancesByCurrency(appData) : { EUR: 0, MKD: 0, CHF: 0 };
+  }, [appData]);
+
+  const currentBalanceMkdLive = useMemo(() => {
+    return liveValuationMkd(balances, { eurMkdRate: rate, chfMkdRate });
+  }, [balances, chfMkdRate, rate]);
+
+  // Gjendja Aktuale uses CURRENT manual rates on remaining balances only.
+  const remaining = currentBalanceMkdLive / rate;
 
   const exportDashboard = useCallback(() => {
     if (filteredEntries.length === 0) {
@@ -127,10 +150,8 @@ export function DashboardView({ user }: DashboardViewProps) {
       return;
     }
 
-    const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
-
     const exportedIncome = filteredEntries.reduce(
-      (sum, entry) => sum + ledgerAmountEurLive(entry, rate, chfMkdRate),
+      (sum, entry) => sum + ledgerAmountEur(entry),
       0
     );
 
@@ -144,8 +165,12 @@ export function DashboardView({ user }: DashboardViewProps) {
         { header: "MKD", value: "Shuma (MKD)" },
       ],
       ...filteredEntries.map((entry) => {
-        const eur = ledgerAmountEurLive(entry, rate, chfMkdRate);
+        const eur = ledgerAmountEur(entry);
         const cur = entry.currency ?? "EUR";
+        const mkdAtEntry =
+          entry.mkdValueAtEntry != null && Number.isFinite(entry.mkdValueAtEntry)
+            ? entry.mkdValueAtEntry
+            : null;
         return [
           { header: "Data", value: entry.date },
           { header: "Klienti", value: entry.client },
@@ -154,9 +179,7 @@ export function DashboardView({ user }: DashboardViewProps) {
           { header: "Shuma", value: formatEur(eur) },
           {
             header: "MKD",
-            value: formatMkd(
-              amountToMkdDisplay(entry.amount, cur, rate, chfMkdRate)
-            ),
+            value: mkdAtEntry != null ? formatMkd(mkdAtEntry) : "Kurs i panjohur",
           },
         ];
       }),
@@ -200,19 +223,19 @@ export function DashboardView({ user }: DashboardViewProps) {
       ],
       [
         { header: "Data", value: "Totali buxhetit (global)" },
-        { header: "Klienti", value: formatEur(totalBudget) },
+        { header: "Klienti", value: formatMkd(historicalIncomeMkd) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
-        { header: "MKD", value: mkdFromEur(totalBudget) },
+        { header: "MKD", value: "" },
       ],
       [
         { header: "Data", value: "Totali daljeve (global)" },
-        { header: "Klienti", value: formatEur(totalExpenses) },
+        { header: "Klienti", value: formatMkd(historicalExpenseMkd) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
-        { header: "MKD", value: mkdFromEur(totalExpenses) },
+        { header: "MKD", value: "" },
       ],
       [
         { header: "Data", value: "Fitimi / Gjendja aktuale (global)" },
@@ -220,7 +243,7 @@ export function DashboardView({ user }: DashboardViewProps) {
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
-        { header: "MKD", value: mkdFromEur(remaining) },
+        { header: "MKD", value: formatMkd(currentBalanceMkdLive) },
       ],
       [
         { header: "Data", value: "Totali i rreshtave të eksportuar" },
@@ -228,7 +251,7 @@ export function DashboardView({ user }: DashboardViewProps) {
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
-        { header: "MKD", value: mkdFromEur(exportedIncome) },
+        { header: "MKD", value: "" },
       ],
       [
         { header: "Data", value: "Numri i rreshtave të eksportuar" },
@@ -256,7 +279,16 @@ export function DashboardView({ user }: DashboardViewProps) {
       currency: "EUR",
       date: new Date().toLocaleDateString(),
     }).catch(() => {});
-  }, [chfMkdRate, filteredEntries, rate, remaining, totalBudget, totalExpenses]);
+  }, [
+    chfMkdRate,
+    currentBalanceMkdLive,
+    filteredEntries,
+    historicalExpenseMkd,
+    historicalIncomeMkd,
+    rate,
+    remaining,
+    user,
+  ]);
 
   const prevRateRef = useRef<number | null>(null);
   const prevChfRateRef = useRef<number | null>(null);
@@ -598,14 +630,20 @@ export function DashboardView({ user }: DashboardViewProps) {
             <div className="box green">
               <h3>Të Hyrat Totale</h3>
               <p id="totalBudget">
-                <AmountEurMkd eur={totalBudget} />
+                <span className="amount-eur-mkd">
+                  <span className="amount-eur">{formatEur(historicalIncomeEur)}</span>
+                  <span className="amount-mkd">{formatMkd(historicalIncomeMkd)}</span>
+                </span>
               </p>
             </div>
 
             <div className="box red">
               <h3>Daljet Totale</h3>
               <p id="totalExpenses">
-                <AmountEurMkd eur={totalExpenses} />
+                <span className="amount-eur-mkd">
+                  <span className="amount-eur">{formatEur(historicalExpenseEur)}</span>
+                  <span className="amount-mkd">{formatMkd(historicalExpenseMkd)}</span>
+                </span>
               </p>
             </div>
 
