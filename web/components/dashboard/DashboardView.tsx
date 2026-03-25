@@ -9,7 +9,6 @@ import {
   addDashboardEntry,
   deleteDashboardEntry,
   subscribeUserAppData,
-  sumAllExpenses,
   updateDashboardEntry,
 } from "@/lib/firestore/userAppData";
 import { TablePagination } from "@/components/pagination/TablePagination";
@@ -26,8 +25,10 @@ import { parseLedgerAmountInput } from "@/lib/export/eurMkd";
 import { formatEur, formatRate } from "@/lib/formatMoney";
 import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
 import { useEurMkdRate } from "@/contexts/EurMkdRateContext";
-import { amountToMkdDisplay, ledgerAmountEur } from "@/lib/currency";
+import { amountToMkdDisplay } from "@/lib/currency";
+import { ledgerAmountEurLive, sumLedgerEntriesEurLive } from "@/lib/currency";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { logAuditEvent } from "@/lib/firestore/activityLog";
 import type { LedgerCurrency, LedgerEntry, UserAppData } from "@/types/userApp";
 
 type DashboardViewProps = {
@@ -105,8 +106,19 @@ export function DashboardView({ user }: DashboardViewProps) {
     return filteredEntries.slice(start, start + pageSize);
   }, [filteredEntries, paginationEnabled, safeTablePage, pageSize]);
 
-  const totalBudget = appData?.totalBudget ?? 0;
-  const totalExpenses = appData ? sumAllExpenses(appData) : 0;
+  const totalBudget = useMemo(() => {
+    return appData ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate) : 0;
+  }, [appData, chfMkdRate, rate]);
+
+  const totalExpenses = useMemo(() => {
+    if (!appData) return 0;
+    // Recompute from raw amounts + currency so rate edits update totals instantly.
+    return Object.values(appData.expenses).flat().reduce(
+      (sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate),
+      0
+    );
+  }, [appData, chfMkdRate, rate]);
+
   const remaining = totalBudget - totalExpenses;
 
   const exportDashboard = useCallback(() => {
@@ -118,7 +130,7 @@ export function DashboardView({ user }: DashboardViewProps) {
     const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
 
     const exportedIncome = filteredEntries.reduce(
-      (sum, entry) => sum + ledgerAmountEur(entry),
+      (sum, entry) => sum + ledgerAmountEurLive(entry, rate, chfMkdRate),
       0
     );
 
@@ -132,7 +144,7 @@ export function DashboardView({ user }: DashboardViewProps) {
         { header: "MKD", value: "Shuma (MKD)" },
       ],
       ...filteredEntries.map((entry) => {
-        const eur = ledgerAmountEur(entry);
+        const eur = ledgerAmountEurLive(entry, rate, chfMkdRate);
         const cur = entry.currency ?? "EUR";
         return [
           { header: "Data", value: entry.date },
@@ -188,7 +200,7 @@ export function DashboardView({ user }: DashboardViewProps) {
       ],
       [
         { header: "Data", value: "Totali buxhetit (global)" },
-        { header: "Klienti", value: `${totalBudget} €` },
+        { header: "Klienti", value: formatEur(totalBudget) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -204,7 +216,7 @@ export function DashboardView({ user }: DashboardViewProps) {
       ],
       [
         { header: "Data", value: "Fitimi / Gjendja aktuale (global)" },
-        { header: "Klienti", value: `${remaining} €` },
+        { header: "Klienti", value: formatEur(remaining) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -228,7 +240,81 @@ export function DashboardView({ user }: DashboardViewProps) {
       ],
     ];
     downloadExcelCsv("dashboard-export", rows);
+    void logAuditEvent(user, {
+      actorEmail: user.email ?? null,
+      auditSource: "Dashboard",
+      eventType: "export.excel",
+      changeDetails: {
+        summary: `Exported Excel (${filteredEntries.length} rows)`,
+      },
+      action: "create",
+      stream: "income",
+      ownerKey: null,
+      entryId: null,
+      client: "Export Excel",
+      amount: filteredEntries.length,
+      currency: "EUR",
+      date: new Date().toLocaleDateString(),
+    }).catch(() => {});
   }, [chfMkdRate, filteredEntries, rate, remaining, totalBudget, totalExpenses]);
+
+  const prevRateRef = useRef<number | null>(null);
+  const prevChfRateRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevRateRef.current == null) {
+      prevRateRef.current = rate;
+      return;
+    }
+    const prev = prevRateRef.current;
+    if (prev !== rate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Dashboard",
+        eventType: "rate.eur_mkd.change",
+        changeDetails: {
+          summary: `EUR→MKD changed from ${prev} to ${rate}`,
+          fields: { eurMkdRate: { from: prev, to: rate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "EUR→MKD rate",
+        amount: rate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevRateRef.current = rate;
+    }
+  }, [rate, user]);
+
+  useEffect(() => {
+    if (prevChfRateRef.current == null) {
+      prevChfRateRef.current = chfMkdRate;
+      return;
+    }
+    const prev = prevChfRateRef.current;
+    if (prev !== chfMkdRate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Dashboard",
+        eventType: "rate.chf_mkd.change",
+        changeDetails: {
+          summary: `CHF→MKD changed from ${prev} to ${chfMkdRate}`,
+          fields: { chfMkdRate: { from: prev, to: chfMkdRate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "CHF→MKD rate",
+        amount: chfMkdRate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevChfRateRef.current = chfMkdRate;
+    }
+  }, [chfMkdRate, user]);
 
   const addItem = useCallback(async () => {
     const client = clientInput.trim();
@@ -250,7 +336,8 @@ export function DashboardView({ user }: DashboardViewProps) {
         date,
         currencyInput,
         rate,
-        chfMkdRate
+        chfMkdRate,
+        "Dashboard"
       );
       setClientInput("");
       setAmountInput("");
@@ -264,7 +351,7 @@ export function DashboardView({ user }: DashboardViewProps) {
   const onDelete = useCallback(
     async (entry: LedgerEntry) => {
       try {
-        await deleteDashboardEntry(user, entry);
+        await deleteDashboardEntry(user, entry, "Dashboard");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Fshirja dështoi.";
         alert(msg);
@@ -295,7 +382,8 @@ export function DashboardView({ user }: DashboardViewProps) {
           newAmount,
           editCurrency,
           rate,
-          chfMkdRate
+          chfMkdRate,
+          "Dashboard"
         );
         setEditingId(null);
       } catch (e) {
@@ -582,8 +670,11 @@ export function DashboardView({ user }: DashboardViewProps) {
               </button>
               <button
                 type="button"
-                className="ledger-pagination-toggle"
-                aria-pressed={paginationEnabled}
+                className={
+                  paginationEnabled
+                    ? "ledger-pagination-toggle ledger-pagination-toggle--active"
+                    : "ledger-pagination-toggle"
+                }
                 onClick={() => {
                   togglePagination();
                   setTablePage(1);

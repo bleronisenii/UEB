@@ -46,6 +46,34 @@ export function ledgerAmountEur(entry: Pick<LedgerEntry, "amount" | "amountEur">
 }
 
 /**
+ * Live EUR equivalent for UI/summary values.
+ *
+ * IMPORTANT: We intentionally do NOT rely on stored `amountEur` because CHF/MKD rows
+ * must recompute when the user changes rates (status cards, reports, history, exports).
+ * For EUR rows, `amount` is already EUR and does not depend on rates.
+ */
+export function ledgerAmountEurLive(
+  entry: Pick<LedgerEntry, "amount" | "currency">,
+  eurMkdRate: number,
+  chfMkdRate: number = CHF_TO_MKD_DEFAULT
+): number {
+  const cur = entry.currency ?? "EUR";
+  if (cur === "EUR") return entry.amount;
+  return convertToEur(entry.amount, cur, eurMkdRate, chfMkdRate);
+}
+
+export function sumLedgerEntriesEurLive(
+  entries: ReadonlyArray<Pick<LedgerEntry, "amount" | "currency">>,
+  eurMkdRate: number,
+  chfMkdRate: number = CHF_TO_MKD_DEFAULT
+): number {
+  return entries.reduce(
+    (sum, e) => sum + ledgerAmountEurLive(e, eurMkdRate, chfMkdRate),
+    0
+  );
+}
+
+/**
  * MKD shown next to a ledger amount: EUR→MKD via EUR rate; MKD unchanged; CHF→MKD via CHF rate only
  * (not EUR_equiv × EUR rate, so tweaking EUR/MKD does not move CHF’s MKD line).
  */

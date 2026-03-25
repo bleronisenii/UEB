@@ -698,7 +698,7 @@ button.ledger-pagination-toggle:hover {
   border-color: #bbb;
 }
 
-button.ledger-pagination-toggle[aria-pressed="true"] {
+button.ledger-pagination-toggle.ledger-pagination-toggle--active {
   background: #e3f2fd;
   border-color: #2196f3;
 }
@@ -1426,7 +1426,7 @@ html.dark .ledger-pagination-toggle:hover {
   border-color: #555555;
 }
 
-html.dark .ledger-pagination-toggle[aria-pressed="true"] {
+html.dark .ledger-pagination-toggle.ledger-pagination-toggle--active {
   background: #1e3a5f;
   border-color: #2196f3;
   color: #ffffff;

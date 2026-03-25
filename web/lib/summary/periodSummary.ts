@@ -1,5 +1,5 @@
 import { parseLedgerDateString } from "@/lib/dates/parseLedgerDate";
-import { ledgerAmountEur } from "@/lib/currency";
+import { ledgerAmountEurLive } from "@/lib/currency";
 import { EXPENSE_OWNER_KEYS, type UserAppData } from "@/types/userApp";
 
 export type SummaryPeriodMode = "month" | "year";
@@ -33,7 +33,9 @@ function formatMonthLabel(key: string): string {
 
 export function buildPeriodSummary(
   data: UserAppData,
-  mode: SummaryPeriodMode
+  mode: SummaryPeriodMode,
+  eurMkdRate: number,
+  chfMkdRate: number
 ): PeriodSummaryRow[] {
   const map = new Map<string, { income: number; expense: number }>();
 
@@ -48,7 +50,7 @@ export function buildPeriodSummary(
     const d = parseLedgerDateString(e.date);
     if (!d) continue;
     const key = mode === "month" ? monthKey(d) : yearKey(d);
-    bump(key, "income", ledgerAmountEur(e));
+    bump(key, "income", ledgerAmountEurLive(e, eurMkdRate, chfMkdRate));
   }
 
   for (const owner of EXPENSE_OWNER_KEYS) {
@@ -56,7 +58,7 @@ export function buildPeriodSummary(
       const d = parseLedgerDateString(e.date);
       if (!d) continue;
       const key = mode === "month" ? monthKey(d) : yearKey(d);
-      bump(key, "expense", ledgerAmountEur(e));
+      bump(key, "expense", ledgerAmountEurLive(e, eurMkdRate, chfMkdRate));
     }
   }
 

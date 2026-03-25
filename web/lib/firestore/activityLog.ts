@@ -22,7 +22,13 @@ import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey } from "@/types/userApp";
 import type { UserAppData } from "@/types/userApp";
 import { isLedgerCurrency, ledgerAmountEur } from "@/lib/currency";
-import type { ActivityEvent, ActivityEventParsed } from "@/types/activityLog";
+import type {
+  ActivityEvent,
+  ActivityEventParsed,
+  AuditChangeDetails,
+  AuditEventType,
+  AuditSource,
+} from "@/types/activityLog";
 
 const ACTIVITY_PAGE_SIZE = 2000;
 
@@ -58,6 +64,26 @@ export function appendActivityInTransaction(
     ...(source ? { source } : {}),
     createdAt: serverTimestamp(),
   });
+}
+
+export type AuditWritePayload = Partial<
+  Pick<ActivityEvent, "actorEmail" | "auditSource" | "eventType" | "changeDetails">
+>;
+
+export async function logAuditEvent(
+  user: User,
+  payload: ActivityWritePayload
+): Promise<void> {
+  const ref = newActivityDocRef(user.uid);
+  const { source, ...rest } = payload;
+  const db = getFirebaseFirestore();
+  const batch = writeBatch(db);
+  batch.set(ref, {
+    ...rest,
+    ...(source ? { source } : {}),
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }
 
 function parseTimestampMs(data: DocumentData): Date | null {
@@ -103,6 +129,16 @@ export function parseActivityDoc(
       ? data.previousAmountEur
       : undefined;
   const date = typeof data.date === "string" ? data.date : "";
+  const actorEmail =
+    typeof data.actorEmail === "string" ? data.actorEmail : data.actorEmail === null ? null : undefined;
+  const auditSource =
+    typeof data.auditSource === "string" ? (data.auditSource as AuditSource) : undefined;
+  const eventType =
+    typeof data.eventType === "string" ? (data.eventType as AuditEventType) : undefined;
+  const changeDetails =
+    data.changeDetails && typeof data.changeDetails === "object"
+      ? (data.changeDetails as AuditChangeDetails)
+      : undefined;
   const ownerKey =
     stream === "income"
       ? null
@@ -113,6 +149,10 @@ export function parseActivityDoc(
           : null;
   return {
     id,
+    actorEmail,
+    auditSource,
+    eventType,
+    changeDetails,
     action,
     stream,
     ownerKey,
@@ -206,6 +246,12 @@ export async function backfillActivityLogIfEmpty(
 
   for (const e of data.dashboardEntries) {
     await enqueue({
+      actorEmail: null,
+      auditSource: "System",
+      eventType: "system.backfill",
+      changeDetails: {
+        summary: "Backfilled from existing budget rows",
+      },
       action: "create",
       stream: "income",
       ownerKey: null,
@@ -222,6 +268,12 @@ export async function backfillActivityLogIfEmpty(
   for (const owner of EXPENSE_OWNER_KEYS) {
     for (const e of data.expenses[owner]) {
       await enqueue({
+        actorEmail: null,
+        auditSource: "System",
+        eventType: "system.backfill",
+        changeDetails: {
+          summary: "Backfilled from existing expense rows",
+        },
         action: "create",
         stream: "expense",
         ownerKey: owner,

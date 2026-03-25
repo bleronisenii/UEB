@@ -11,6 +11,7 @@ import type { User } from "firebase/auth";
 import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
 import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
 import { convertToEur, isLedgerCurrency, ledgerAmountEur } from "@/lib/currency";
+import type { AuditSource } from "@/types/activityLog";
 import {
   EXPENSE_OWNER_KEYS,
   type ExpenseOwnerKey,
@@ -18,6 +19,10 @@ import {
   type LedgerEntry,
   type UserAppData,
 } from "@/types/userApp";
+
+function actorEmail(user: User): string | null {
+  return user.email ?? null;
+}
 
 export function userAppDataRef(uid: string) {
   return doc(getFirebaseFirestore(), USER_APP_DATA_COLLECTION, uid);
@@ -115,7 +120,8 @@ export async function addDashboardEntry(
   dateStr: string,
   currency: LedgerCurrency,
   eurMkdRate: number,
-  chfMkdRate: number
+  chfMkdRate: number,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   const id =
@@ -140,6 +146,18 @@ export async function addDashboardEntry(
     data.dashboardEntries = [...data.dashboardEntries, entry];
     data.totalBudget += amountEur;
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "budget.add",
+      changeDetails: {
+        summary: `Added budget ${amount} ${currency}`,
+        fields: {
+          client: { to: client },
+          amount: { to: amount },
+          currency: { to: currency },
+          eurEquivalent: { to: amountEur },
+        },
+      },
       action: "create",
       stream: "income",
       ownerKey: null,
@@ -157,7 +175,8 @@ export async function addDashboardEntry(
 
 export async function deleteDashboardEntry(
   user: User,
-  entry: LedgerEntry
+  entry: LedgerEntry,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -190,6 +209,18 @@ export async function deleteDashboardEntry(
     }
 
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "budget.delete",
+      changeDetails: {
+        summary: `Deleted budget row "${fromDb.client}"`,
+        fields: {
+          client: { from: fromDb.client },
+          amount: { from: fromDb.amount },
+          currency: { from: fromDb.currency ?? "EUR" },
+          eurEquivalent: { from: removedEur },
+        },
+      },
       action: "delete",
       stream: "income",
       ownerKey: null,
@@ -203,6 +234,12 @@ export async function deleteDashboardEntry(
     });
     for (const { owner, exp } of cascaded) {
       appendActivityInTransaction(tx, user.uid, {
+        actorEmail: actorEmail(user),
+        auditSource,
+        eventType: "expense.delete",
+        changeDetails: {
+          summary: `Deleted cascaded expense "${exp.client}" due to budget deletion`,
+        },
         action: "delete",
         stream: "expense",
         ownerKey: owner,
@@ -227,7 +264,8 @@ export async function updateDashboardEntry(
   newAmountInput: number,
   newCurrency: LedgerCurrency,
   eurMkdRate: number,
-  chfMkdRate: number
+  chfMkdRate: number,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -259,6 +297,18 @@ export async function updateDashboardEntry(
     const nextEur = ledgerAmountEur(next);
     const budgetDelta = nextEur - prevEur;
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "budget.edit",
+      changeDetails: {
+        summary: `Edited budget row "${prev.client}"`,
+        fields: {
+          client: { from: prev.client, to: next.client },
+          amount: { from: prev.amount, to: next.amount },
+          currency: { from: prev.currency ?? "EUR", to: next.currency ?? "EUR" },
+          eurEquivalent: { from: prevEur, to: nextEur },
+        },
+      },
       action: "update",
       stream: "income",
       ownerKey: null,
@@ -301,7 +351,8 @@ export async function addExpenseEntry(
   dateStr: string,
   currency: LedgerCurrency,
   eurMkdRate: number,
-  chfMkdRate: number
+  chfMkdRate: number,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   const id =
@@ -325,6 +376,19 @@ export async function addExpenseEntry(
       : createDefaultUserAppData();
     data.expenses[ownerKey] = [...data.expenses[ownerKey], entry];
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "expense.add",
+      changeDetails: {
+        summary: `Added expense ${amount} ${currency}`,
+        fields: {
+          ownerKey: { to: ownerKey },
+          client: { to: client },
+          amount: { to: amount },
+          currency: { to: currency },
+          eurEquivalent: { to: amountEur },
+        },
+      },
       action: "create",
       stream: "expense",
       ownerKey,
@@ -342,7 +406,8 @@ export async function addExpenseEntry(
 export async function deleteExpenseEntry(
   user: User,
   ownerKey: ExpenseOwnerKey,
-  entry: LedgerEntry
+  entry: LedgerEntry,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -371,6 +436,19 @@ export async function deleteExpenseEntry(
             )
         );
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "expense.delete",
+      changeDetails: {
+        summary: `Deleted expense "${fromDb.client}"`,
+        fields: {
+          ownerKey: { from: ownerKey },
+          client: { from: fromDb.client },
+          amount: { from: fromDb.amount },
+          currency: { from: fromDb.currency ?? "EUR" },
+          eurEquivalent: { from: ledgerAmountEur(fromDb) },
+        },
+      },
       action: "delete",
       stream: "expense",
       ownerKey,
@@ -393,7 +471,8 @@ export async function updateExpenseEntry(
   newAmountInput: number,
   newCurrency: LedgerCurrency,
   eurMkdRate: number,
-  chfMkdRate: number
+  chfMkdRate: number,
+  auditSource: AuditSource
 ): Promise<void> {
   const ref = userAppDataRef(user.uid);
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -418,6 +497,19 @@ export async function updateExpenseEntry(
     const prevEur = ledgerAmountEur(prev);
     const nextEur = ledgerAmountEur(next);
     appendActivityInTransaction(tx, user.uid, {
+      actorEmail: actorEmail(user),
+      auditSource,
+      eventType: "expense.edit",
+      changeDetails: {
+        summary: `Edited expense "${prev.client}"`,
+        fields: {
+          ownerKey: { from: ownerKey },
+          client: { from: prev.client, to: next.client },
+          amount: { from: prev.amount, to: next.amount },
+          currency: { from: prev.currency ?? "EUR", to: next.currency ?? "EUR" },
+          eurEquivalent: { from: prevEur, to: nextEur },
+        },
+      },
       action: "update",
       stream: "expense",
       ownerKey,
