@@ -16,9 +16,10 @@ import {
 import { getFirebaseAuth } from "@/lib/firebase";
 import {
   backfillActivityLogIfEmpty,
+  logAuditEvent,
   subscribeActivityLog,
 } from "@/lib/firestore/activityLog";
-import { subscribeUserAppData, sumAllExpenses } from "@/lib/firestore/userAppData";
+import { subscribeUserAppData } from "@/lib/firestore/userAppData";
 import { activityEventsToRows } from "@/lib/history/activityToRows";
 import { TablePagination } from "@/components/pagination/TablePagination";
 import { useLedgerPaginationPreference } from "@/hooks/useLedgerPaginationPreference";
@@ -30,9 +31,9 @@ import {
   formatEur,
   formatEurDelta,
   formatMoneyAmount,
-  formatRate,
 } from "@/lib/formatMoney";
 import { amountToMkdDisplay, convertToEur } from "@/lib/currency";
+import { ledgerAmountEurLive, sumLedgerEntriesEurLive } from "@/lib/currency";
 import { downloadExcelCsv } from "@/lib/export/excelCsv";
 import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
@@ -209,8 +210,14 @@ export function HistoryView({ user }: HistoryViewProps) {
     const filteredExpenseTotal = filteredRows
       .filter((row) => row.kind === "expense")
       .reduce((sum, row) => sum + row.amount, 0);
-    const totalBudget = appData?.totalBudget ?? 0;
-    const totalExpenses = appData ? sumAllExpenses(appData) : 0;
+    const totalBudget = appData
+      ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate)
+      : 0;
+    const totalExpenses = appData
+      ? Object.values(appData.expenses)
+          .flat()
+          .reduce((sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate), 0)
+      : 0;
     const remaining = totalBudget - totalExpenses;
 
     const rows = [
@@ -261,10 +268,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         },
         {
           header: "Ndikimi",
-          value:
-            row.kind === "income" && row.budgetDelta != null
-              ? formatEurDelta(row.budgetDelta)
-              : "—",
+          value: formatEurDelta(budgetImpactEur(row, rate, chfMkdRate)),
         },
       ]),
       [
@@ -375,7 +379,81 @@ export function HistoryView({ user }: HistoryViewProps) {
       ],
     ];
     downloadExcelCsv("historiku-export", rows);
+    void logAuditEvent(user, {
+      actorEmail: user.email ?? null,
+      auditSource: "Historiku",
+      eventType: "export.excel",
+      changeDetails: {
+        summary: `Exported Excel (${filteredRows.length} rows)`,
+      },
+      action: "create",
+      stream: "income",
+      ownerKey: null,
+      entryId: null,
+      client: "Export Excel",
+      amount: filteredRows.length,
+      currency: "EUR",
+      date: new Date().toLocaleDateString(),
+    }).catch(() => {});
   }, [appData, filteredRows, rate, chfMkdRate]);
+
+  const prevRateRef = useRef<number | null>(null);
+  const prevChfRateRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevRateRef.current == null) {
+      prevRateRef.current = rate;
+      return;
+    }
+    const prev = prevRateRef.current;
+    if (prev !== rate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Historiku",
+        eventType: "rate.eur_mkd.change",
+        changeDetails: {
+          summary: `EUR→MKD changed from ${prev} to ${rate}`,
+          fields: { eurMkdRate: { from: prev, to: rate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "EUR→MKD rate",
+        amount: rate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevRateRef.current = rate;
+    }
+  }, [rate, user]);
+
+  useEffect(() => {
+    if (prevChfRateRef.current == null) {
+      prevChfRateRef.current = chfMkdRate;
+      return;
+    }
+    const prev = prevChfRateRef.current;
+    if (prev !== chfMkdRate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Historiku",
+        eventType: "rate.chf_mkd.change",
+        changeDetails: {
+          summary: `CHF→MKD changed from ${prev} to ${chfMkdRate}`,
+          fields: { chfMkdRate: { from: prev, to: chfMkdRate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "CHF→MKD rate",
+        amount: chfMkdRate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevChfRateRef.current = chfMkdRate;
+    }
+  }, [chfMkdRate, user]);
 
   const onKindChange = useCallback((v: MoneyTimelineKindFilter) => {
     setKindFilter(v);
@@ -423,10 +501,12 @@ export function HistoryView({ user }: HistoryViewProps) {
       <thead>
         <tr>
           <th>Data</th>
+          <th>Përdoruesi</th>
           <th>Lloji</th>
           <th>Veprimi</th>
+          <th>Burimi</th>
           <th>Pronari</th>
-          <th>Përshkrimi</th>
+          <th>Detaje</th>
           <th>Shuma (€ / MKD / CHF)</th>
           <th>Ndikimi në buxhet</th>
         </tr>
@@ -434,7 +514,7 @@ export function HistoryView({ user }: HistoryViewProps) {
       <tbody id="tableBody">
         {filteredRows.length === 0 ? (
           <tr>
-            <td colSpan={7} className="history-empty">
+            <td colSpan={9} className="history-empty">
               {allRows.length === 0
                 ? "Nuk ka aktivitet të regjistruar ende."
                 : "Nuk ka rreshta që përputhen me filtrat."}
@@ -455,10 +535,12 @@ export function HistoryView({ user }: HistoryViewProps) {
       <thead>
         <tr>
           <th>Data</th>
+          <th>Përdoruesi</th>
           <th>Lloji</th>
           <th>Veprimi</th>
+          <th>Burimi</th>
           <th>Pronari</th>
-          <th>Përshkrimi</th>
+          <th>Detaje</th>
           <th>Shuma (€ / MKD / CHF)</th>
           <th>Ndikimi në buxhet</th>
         </tr>
@@ -466,7 +548,7 @@ export function HistoryView({ user }: HistoryViewProps) {
       <tbody>
         {filteredRows.length === 0 ? (
           <tr>
-            <td colSpan={7} className="history-empty">
+            <td colSpan={9} className="history-empty">
               {allRows.length === 0
                 ? "Nuk ka aktivitet të regjistruar ende."
                 : "Nuk ka rreshta që përputhen me filtrat."}
@@ -633,14 +715,33 @@ export function HistoryView({ user }: HistoryViewProps) {
               <button
                 type="button"
                 className="ledger-pagination-toggle"
-                onClick={() => window.print()}
+                onClick={() => {
+                  void logAuditEvent(user, {
+                    actorEmail: user.email ?? null,
+                    auditSource: "Historiku",
+                    eventType: "print.page",
+                    changeDetails: { summary: "Printed Historiku page" },
+                    action: "create",
+                    stream: "income",
+                    ownerKey: null,
+                    entryId: null,
+                    client: "Print",
+                    amount: 0,
+                    currency: "EUR",
+                    date: new Date().toLocaleDateString(),
+                  }).catch(() => {});
+                  window.print();
+                }}
               >
                 Printo
               </button>
               <button
                 type="button"
-                className="ledger-pagination-toggle"
-                aria-pressed={paginationEnabled}
+                className={
+                  paginationEnabled
+                    ? "ledger-pagination-toggle ledger-pagination-toggle--active"
+                    : "ledger-pagination-toggle"
+                }
                 onClick={() => {
                   togglePagination();
                   setTablePage(1);
@@ -711,6 +812,33 @@ function kindCategory(row: MoneyTimelineRow): string {
 }
 
 function veprimLabel(row: MoneyTimelineRow): string {
+  // Prefer explicit audit event type when present (more readable than action/stream only).
+  switch (row.eventType) {
+    case "budget.add":
+      return "Shtoi buxhet";
+    case "budget.edit":
+      return "Ndryshoi buxhet";
+    case "budget.delete":
+      return "Fshiu buxhet";
+    case "expense.add":
+      return "Shtoi shpenzim";
+    case "expense.edit":
+      return "Ndryshoi shpenzim";
+    case "expense.delete":
+      return "Fshiu shpenzim";
+    case "rate.eur_mkd.change":
+      return "Ndryshoi kursin EUR→MKD";
+    case "rate.chf_mkd.change":
+      return "Ndryshoi kursin CHF→MKD";
+    case "export.excel":
+      return "Eksportoi Excel";
+    case "print.page":
+      return "Printoi";
+    case "system.backfill":
+      return "Sistem (backfill)";
+    default:
+      break;
+  }
   if (row.kind === "income") {
     if (row.action === "create") return "Shtim në buxhet";
     if (row.action === "delete") return "Heqje nga buxheti";
@@ -721,8 +849,56 @@ function veprimLabel(row: MoneyTimelineRow): string {
   return "Ndryshim shpenzimi";
 }
 
-function timelineRowEur(row: MoneyTimelineRow): number {
-  return row.amountEur ?? row.amount;
+function actorLabel(row: MoneyTimelineRow): string {
+  return row.actorEmail ? row.actorEmail : row.source === "backfill" ? "Sistem" : "Nuk dihet";
+}
+
+function sourceLabel(row: MoneyTimelineRow): string {
+  return row.auditSource ?? (row.source === "backfill" ? "System" : "—");
+}
+
+function detailsLabel(row: MoneyTimelineRow): string {
+  if (row.changeDetails?.summary) return row.changeDetails.summary;
+  // Fallback to previous → next when possible.
+  if (
+    row.action === "update" &&
+    (row.previousClient != null || row.previousAmount != null || row.previousCurrency != null)
+  ) {
+    const prevCur = row.previousCurrency ?? row.currency ?? "EUR";
+    const nextCur = row.currency ?? prevCur;
+    const prevAmount = row.previousAmount != null ? `${row.previousAmount} ${prevCur}` : "";
+    const nextAmount = `${row.amount} ${nextCur}`;
+    const amountPart =
+      prevAmount && prevAmount !== nextAmount ? `${prevAmount} → ${nextAmount}` : nextAmount;
+    const prevClient = row.previousClient ?? row.client;
+    const clientPart = prevClient !== row.client ? `${prevClient} → ${row.client}` : row.client;
+    return `${clientPart} · ${amountPart}`.trim();
+  }
+  // Create/delete
+  return row.client || "—";
+}
+
+function budgetImpactEur(
+  row: MoneyTimelineRow,
+  eurMkdRate: number,
+  chfMkdRate: number
+): number {
+  const cur = row.currency ?? "EUR";
+  const nextEur = convertToEur(row.amount, cur, eurMkdRate, chfMkdRate);
+  const prevCur = row.previousCurrency ?? cur;
+  const prevAmount = row.previousAmount ?? 0;
+  const prevEur = convertToEur(prevAmount, prevCur, eurMkdRate, chfMkdRate);
+
+  if (row.kind === "income") {
+    if (row.action === "create") return nextEur;
+    if (row.action === "delete") return -nextEur;
+    return nextEur - prevEur; // update
+  }
+
+  // expense reduces remaining budget
+  if (row.action === "create") return -nextEur;
+  if (row.action === "delete") return nextEur;
+  return -(nextEur - prevEur); // update
 }
 
 function formatHistoryAmountExport(row: MoneyTimelineRow): string {
@@ -760,10 +936,12 @@ function HistoryEntry({
       : row.client;
 
   const cur = row.currency ?? "EUR";
-  const eur = timelineRowEur(row);
+  const eur = convertToEur(row.amount, cur, rate, chfMkdRate);
+  const prevCur = row.previousCurrency ?? cur;
   const prevEur =
-    row.previousAmountEur ??
-    (row.previousAmount != null ? row.previousAmount : undefined);
+    row.previousAmount != null
+      ? convertToEur(row.previousAmount, prevCur, rate, chfMkdRate)
+      : undefined;
 
   const amountIsUpdate =
     row.action === "update" &&
@@ -771,22 +949,23 @@ function HistoryEntry({
     (row.previousAmount !== row.amount ||
       (row.previousCurrency ?? "EUR") !== (row.currency ?? "EUR"));
 
+  const impact = budgetImpactEur(row, rate, chfMkdRate);
   const budgetCell =
-    row.kind === "income" && row.budgetDelta != null ? (
+    Number.isFinite(impact) ? (
       <span className="amount-eur-mkd amount-eur-mkd--compact">
         <span
           className={
-            row.budgetDelta > 0
+            impact > 0
               ? "history-budget-pos"
-              : row.budgetDelta < 0
+              : impact < 0
                 ? "history-budget-neg"
                 : ""
           }
         >
-          {formatEurDelta(row.budgetDelta)}
+          {formatEurDelta(impact)}
         </span>
         <span className="amount-mkd">
-          {formatMkd(eurToMkd(row.budgetDelta, rate))}
+          {formatMkd(eurToMkd(impact, rate))}
         </span>
       </span>
     ) : (
@@ -835,6 +1014,14 @@ function HistoryEntry({
         </div>
         <dl className="history-entry-card__fields">
           <div className="history-entry-card__row">
+            <dt>Përdoruesi</dt>
+            <dd>{actorLabel(row)}</dd>
+          </div>
+          <div className="history-entry-card__row">
+            <dt>Burimi</dt>
+            <dd>{sourceLabel(row)}</dd>
+          </div>
+          <div className="history-entry-card__row">
             <dt>Veprimi</dt>
             <dd>{veprimLabel(row)}</dd>
           </div>
@@ -843,19 +1030,17 @@ function HistoryEntry({
             <dd>{ownerLabel}</dd>
           </div>
           <div className="history-entry-card__row">
-            <dt>Përshkrimi</dt>
-            <dd>{clientDisplay}</dd>
+            <dt>Detaje</dt>
+            <dd>{detailsLabel(row)}</dd>
           </div>
           <div className="history-entry-card__row">
             <dt>Shuma</dt>
             <dd className="history-entry-card__amount">{amountCell}</dd>
           </div>
-          {row.kind === "income" ? (
-            <div className="history-entry-card__row">
-              <dt>Ndikimi në buxhet</dt>
-              <dd>{budgetCell}</dd>
-            </div>
-          ) : null}
+          <div className="history-entry-card__row">
+            <dt>Ndikimi në buxhet</dt>
+            <dd>{budgetCell}</dd>
+          </div>
         </dl>
       </article>
     );
@@ -864,10 +1049,12 @@ function HistoryEntry({
   return (
     <tr>
       <td>{row.date}</td>
+      <td>{actorLabel(row)}</td>
       <td>{kindCategory(row)}</td>
       <td>{veprimLabel(row)}</td>
+      <td>{sourceLabel(row)}</td>
       <td>{ownerLabel}</td>
-      <td className="client">{clientDisplay}</td>
+      <td className="client">{detailsLabel(row)}</td>
       <td className="amount">{amountCell}</td>
       <td className="history-budget-cell">{budgetCell}</td>
     </tr>

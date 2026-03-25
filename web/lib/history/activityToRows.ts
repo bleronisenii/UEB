@@ -17,6 +17,11 @@ function activityToRow(ev: ActivityEventParsed): MoneyTimelineRow {
       : ev.previousAmount;
   return {
     id: ev.id,
+    actorEmail: ev.actorEmail,
+    auditSource: ev.auditSource,
+    eventType: ev.eventType,
+    changeDetails: ev.changeDetails,
+    source: ev.source,
     kind: ev.stream === "income" ? "income" : "expense",
     action: ev.action,
     ownerKey: ev.stream === "expense" ? ev.ownerKey : null,

@@ -1,4 +1,5 @@
 import type { ActivityAction } from "@/types/activityLog";
+import type { AuditChangeDetails, AuditEventType, AuditSource } from "@/types/activityLog";
 import type { ExpenseOwnerKey, LedgerCurrency } from "@/types/userApp";
 
 export type MoneyTimelineKind = "income" | "expense";
@@ -8,6 +9,12 @@ export type MoneyTimelineRow = {
   id: string;
   kind: MoneyTimelineKind;
   action: ActivityAction;
+  actorEmail?: string | null;
+  auditSource?: AuditSource;
+  eventType?: AuditEventType;
+  changeDetails?: AuditChangeDetails;
+  /** Legacy/system flag from stored activity log docs. */
+  source?: "backfill";
   /** Set for expenses; null for dashboard income rows */
   ownerKey: ExpenseOwnerKey | null;
   client: string;

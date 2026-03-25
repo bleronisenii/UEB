@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { subscribeUserAppData } from "@/lib/firestore/userAppData";
 import { downloadExcelCsv } from "@/lib/export/excelCsv";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/summary/periodSummary";
 import type { UserAppData } from "@/types/userApp";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { logAuditEvent } from "@/lib/firestore/activityLog";
 
 type ReportsViewProps = {
   user: User;
@@ -29,6 +30,64 @@ export function ReportsView({ user }: ReportsViewProps) {
   const [mode, setMode] = useState<SummaryPeriodMode>("month");
 
   const { rate, chfMkdRate } = useEurMkdRate();
+
+  const prevRateRef = useRef<number | null>(null);
+  const prevChfRateRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevRateRef.current == null) {
+      prevRateRef.current = rate;
+      return;
+    }
+    const prev = prevRateRef.current;
+    if (prev !== rate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Përmbledhje",
+        eventType: "rate.eur_mkd.change",
+        changeDetails: {
+          summary: `EUR→MKD changed from ${prev} to ${rate}`,
+          fields: { eurMkdRate: { from: prev, to: rate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "EUR→MKD rate",
+        amount: rate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevRateRef.current = rate;
+    }
+  }, [rate, user]);
+
+  useEffect(() => {
+    if (prevChfRateRef.current == null) {
+      prevChfRateRef.current = chfMkdRate;
+      return;
+    }
+    const prev = prevChfRateRef.current;
+    if (prev !== chfMkdRate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Përmbledhje",
+        eventType: "rate.chf_mkd.change",
+        changeDetails: {
+          summary: `CHF→MKD changed from ${prev} to ${chfMkdRate}`,
+          fields: { chfMkdRate: { from: prev, to: chfMkdRate } },
+        },
+        action: "update",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "CHF→MKD rate",
+        amount: chfMkdRate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevChfRateRef.current = chfMkdRate;
+    }
+  }, [chfMkdRate, user]);
 
   useEffect(() => {
     const unsub = subscribeUserAppData(
@@ -48,8 +107,8 @@ export function ReportsView({ user }: ReportsViewProps) {
 
   const rows = useMemo(() => {
     if (!appData) return [];
-    return buildPeriodSummary(appData, mode);
-  }, [appData, mode]);
+    return buildPeriodSummary(appData, mode, rate, chfMkdRate);
+  }, [appData, chfMkdRate, mode, rate]);
 
   const exportReport = useCallback(() => {
     if (rows.length === 0) {
@@ -133,6 +192,22 @@ export function ReportsView({ user }: ReportsViewProps) {
     const slug =
       mode === "month" ? "permbledhje-mujore" : "permbledhje-vjetore";
     downloadExcelCsv(`eksport-${slug}`, out);
+    void logAuditEvent(user, {
+      actorEmail: user.email ?? null,
+      auditSource: "Përmbledhje",
+      eventType: "export.excel",
+      changeDetails: {
+        summary: `Exported Excel (${mode}) (${rows.length} rows)`,
+      },
+      action: "create",
+      stream: "income",
+      ownerKey: null,
+      entryId: null,
+      client: "Export Excel",
+      amount: rows.length,
+      currency: "EUR",
+      date: new Date().toLocaleDateString(),
+    }).catch(() => {});
   }, [chfMkdRate, mode, rate, rows]);
 
   async function handleSignOut() {
@@ -217,7 +292,6 @@ export function ReportsView({ user }: ReportsViewProps) {
                       ? "ledger-pagination-toggle reports-mode--active"
                       : "ledger-pagination-toggle"
                   }
-                  aria-pressed={mode === "month"}
                   onClick={() => setMode("month")}
                 >
                   Mujore
@@ -229,7 +303,6 @@ export function ReportsView({ user }: ReportsViewProps) {
                       ? "ledger-pagination-toggle reports-mode--active"
                       : "ledger-pagination-toggle"
                   }
-                  aria-pressed={mode === "year"}
                   onClick={() => setMode("year")}
                 >
                   Vjetore
@@ -245,7 +318,23 @@ export function ReportsView({ user }: ReportsViewProps) {
               <button
                 type="button"
                 className="ledger-pagination-toggle"
-                onClick={() => window.print()}
+                onClick={() => {
+                  void logAuditEvent(user, {
+                    actorEmail: user.email ?? null,
+                    auditSource: "Përmbledhje",
+                    eventType: "print.page",
+                    changeDetails: { summary: "Printed Përmbledhje page" },
+                    action: "create",
+                    stream: "income",
+                    ownerKey: null,
+                    entryId: null,
+                    client: "Print",
+                    amount: 0,
+                    currency: "EUR",
+                    date: new Date().toLocaleDateString(),
+                  }).catch(() => {});
+                  window.print();
+                }}
               >
                 Printo
               </button>

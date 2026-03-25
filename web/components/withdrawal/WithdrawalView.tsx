@@ -8,8 +8,6 @@ import {
   addExpenseEntry,
   deleteExpenseEntry,
   subscribeUserAppData,
-  sumAllExpenses,
-  sumOwnerExpenses,
   updateExpenseEntry,
 } from "@/lib/firestore/userAppData";
 import { getFirebaseAuth } from "@/lib/firebase";
@@ -27,8 +25,13 @@ import { formatEur, formatRate } from "@/lib/formatMoney";
 import { downloadExcelCsv } from "@/lib/export/excelCsv";
 import { parseLedgerAmountInput } from "@/lib/export/eurMkd";
 import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
-import { amountToMkdDisplay, ledgerAmountEur } from "@/lib/currency";
+import {
+  amountToMkdDisplay,
+  ledgerAmountEurLive,
+  sumLedgerEntriesEurLive,
+} from "@/lib/currency";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { logAuditEvent } from "@/lib/firestore/activityLog";
 import type {
   ExpenseOwnerKey,
   LedgerCurrency,
@@ -153,9 +156,28 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     return filteredEntries.slice(start, start + pageSize);
   }, [filteredEntries, paginationEnabled, safeTablePage, pageSize]);
 
-  const totalBudget = appData?.totalBudget ?? 0;
-  const totalAllExpenses = appData ? sumAllExpenses(appData) : 0;
-  const myTotal = appData ? sumOwnerExpenses(appData, ownerKey) : 0;
+  const totalBudget = useMemo(() => {
+    return appData
+      ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate)
+      : 0;
+  }, [appData, chfMkdRate, rate]);
+
+  const totalAllExpenses = useMemo(() => {
+    if (!appData) return 0;
+    return Object.values(appData.expenses).flat().reduce(
+      (sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate),
+      0
+    );
+  }, [appData, chfMkdRate, rate]);
+
+  const myTotal = useMemo(() => {
+    if (!appData) return 0;
+    return (appData.expenses[ownerKey] ?? []).reduce(
+      (sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate),
+      0
+    );
+  }, [appData, chfMkdRate, ownerKey, rate]);
+
   const remaining = totalBudget - totalAllExpenses;
   const title = WITHDRAWAL_TITLES[ownerKey];
   const nav = WITHDRAWAL_NAV[ownerKey];
@@ -172,7 +194,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
 
     const exportedTotal = filteredEntries.reduce(
-      (sum, entry) => sum + ledgerAmountEur(entry),
+      (sum, entry) => sum + ledgerAmountEurLive(entry, rate, chfMkdRate),
       0
     );
 
@@ -186,7 +208,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
         { header: "MKD", value: "Shuma (MKD)" },
       ],
       ...filteredEntries.map((entry) => {
-        const eur = ledgerAmountEur(entry);
+        const eur = ledgerAmountEurLive(entry, rate, chfMkdRate);
         const cur = entry.currency ?? "EUR";
         return [
           { header: "Data", value: entry.date },
@@ -290,6 +312,22 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
     ];
     downloadExcelCsv(`${ownerKey}-export`, rows);
+    void logAuditEvent(user, {
+      actorEmail: user.email ?? null,
+      auditSource: "Pagesat",
+      eventType: "export.excel",
+      changeDetails: {
+        summary: `Exported Excel (${ownerKey}) (${filteredEntries.length} rows)`,
+      },
+      action: "create",
+      stream: "expense",
+      ownerKey,
+      entryId: null,
+      client: "Export Excel",
+      amount: filteredEntries.length,
+      currency: "EUR",
+      date: new Date().toLocaleDateString(),
+    }).catch(() => {});
   }, [
     chfMkdRate,
     entryLabel,
@@ -301,7 +339,66 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     title,
     totalAllExpenses,
     totalBudget,
+    user,
   ]);
+
+  const prevRateRef = useRef<number | null>(null);
+  const prevChfRateRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevRateRef.current == null) {
+      prevRateRef.current = rate;
+      return;
+    }
+    const prev = prevRateRef.current;
+    if (prev !== rate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Pagesat",
+        eventType: "rate.eur_mkd.change",
+        changeDetails: {
+          summary: `EUR→MKD changed from ${prev} to ${rate}`,
+          fields: { eurMkdRate: { from: prev, to: rate } },
+        },
+        action: "update",
+        stream: "expense",
+        ownerKey,
+        entryId: null,
+        client: "EUR→MKD rate",
+        amount: rate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevRateRef.current = rate;
+    }
+  }, [ownerKey, rate, user]);
+
+  useEffect(() => {
+    if (prevChfRateRef.current == null) {
+      prevChfRateRef.current = chfMkdRate;
+      return;
+    }
+    const prev = prevChfRateRef.current;
+    if (prev !== chfMkdRate) {
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Pagesat",
+        eventType: "rate.chf_mkd.change",
+        changeDetails: {
+          summary: `CHF→MKD changed from ${prev} to ${chfMkdRate}`,
+          fields: { chfMkdRate: { from: prev, to: chfMkdRate } },
+        },
+        action: "update",
+        stream: "expense",
+        ownerKey,
+        entryId: null,
+        client: "CHF→MKD rate",
+        amount: chfMkdRate,
+        currency: "MKD",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      prevChfRateRef.current = chfMkdRate;
+    }
+  }, [chfMkdRate, ownerKey, user]);
 
   const addItem = useCallback(async () => {
     const client = clientInput.trim();
@@ -324,7 +421,8 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
         date,
         currencyInput,
         rate,
-        chfMkdRate
+        chfMkdRate,
+        "Pagesat"
       );
       setClientInput("");
       setAmountInput("");
@@ -338,7 +436,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
   const onDelete = useCallback(
     async (entry: LedgerEntry) => {
       try {
-        await deleteExpenseEntry(user, ownerKey, entry);
+        await deleteExpenseEntry(user, ownerKey, entry, "Pagesat");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Fshirja dështoi.";
         alert(msg);
@@ -368,7 +466,8 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           newAmount,
           editCurrency,
           rate,
-          chfMkdRate
+          chfMkdRate,
+          "Pagesat"
         );
         setEditingId(null);
       } catch (e) {
@@ -647,8 +746,11 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
               </button>
               <button
                 type="button"
-                className="ledger-pagination-toggle"
-                aria-pressed={paginationEnabled}
+                className={
+                  paginationEnabled
+                    ? "ledger-pagination-toggle ledger-pagination-toggle--active"
+                    : "ledger-pagination-toggle"
+                }
                 onClick={() => {
                   togglePagination();
                   setTablePage(1);

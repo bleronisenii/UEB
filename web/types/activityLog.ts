@@ -6,8 +6,44 @@ export type ActivityStream = "income" | "expense";
 
 export type ActivityAction = "create" | "update" | "delete";
 
+/** More specific, human-readable event category. Stored for audit trail UX. */
+export type AuditEventType =
+  | "budget.add"
+  | "budget.edit"
+  | "budget.delete"
+  | "expense.add"
+  | "expense.edit"
+  | "expense.delete"
+  | "rate.eur_mkd.change"
+  | "rate.chf_mkd.change"
+  | "export.excel"
+  | "print.page"
+  | "system.backfill";
+
+export type AuditSource =
+  | "Dashboard"
+  | "Historiku"
+  | "Përmbledhje"
+  | "Pagesat"
+  | "System"
+  | string;
+
+export type AuditChangeDetails = {
+  summary?: string;
+  fields?: Record<string, { from?: unknown; to?: unknown }>;
+};
+
 /** Stored under `userAppData/{uid}/activityLog/{autoId}`. */
 export type ActivityEvent = {
+  /** Actor email (authenticated user) when available. */
+  actorEmail?: string | null;
+  /** UI/module where the action was triggered (Dashboard, Pagesat, etc.). */
+  auditSource?: AuditSource;
+  /** Specific event type (more detailed than action/stream). */
+  eventType?: AuditEventType;
+  /** Optional structured details for "what exactly changed". */
+  changeDetails?: AuditChangeDetails;
+
   action: ActivityAction;
   stream: ActivityStream;
   ownerKey: ExpenseOwnerKey | null;

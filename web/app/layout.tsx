@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "Budget App",
-  description: "Budget App",
+  title: "UEB Finance",
+  description: "UEB Finance",
 };
 
 export const viewport: Viewport = {
