@@ -2,9 +2,7 @@
 
 import { useEurMkdRate } from "@/contexts/EurMkdRateContext";
 import {
-  amountToMkdDisplay,
   convertToEur,
-  ledgerAmountEur,
 } from "@/lib/currency";
 import { formatEur, formatMoneyAmount } from "@/lib/formatMoney";
 import { eurToMkd, formatMkd, parseLedgerAmountInput } from "@/lib/export/eurMkd";
@@ -90,23 +88,22 @@ export function LedgerCurrencySelect({
   );
 }
 
-/** Table cell: face amount + EUR/MKD from current rates (CHF MKD uses CHF rate, not EUR×EUR/MKD). */
+/** Table cell: face amount + locked MKD-at-entry (if available). */
 export function LedgerRowAmount({ entry }: { entry: LedgerEntry }) {
-  const { rate, chfMkdRate } = useEurMkdRate();
   const cur = entry.currency ?? "EUR";
-  if (cur === "EUR") {
-    return <AmountEurMkd compact eur={ledgerAmountEur(entry)} />;
-  }
-  const eurDisp = convertToEur(entry.amount, cur, rate, chfMkdRate);
-  const mkdDisp = amountToMkdDisplay(entry.amount, cur, rate, chfMkdRate);
+  const mkdLocked =
+    entry.mkdValueAtEntry != null && Number.isFinite(entry.mkdValueAtEntry)
+      ? entry.mkdValueAtEntry
+      : null;
   return (
     <span className="amount-eur-mkd amount-eur-mkd--compact ledger-row-amount">
       <span className="amount-eur">
         {formatMoneyAmount(entry.amount)} {cur}
       </span>
       <span className="ledger-row-amount-equiv">
-        <span className="amount-eur">{formatEur(eurDisp)}</span>
-        <span className="amount-mkd">{formatMkd(mkdDisp)}</span>
+        <span className="amount-mkd">
+          {mkdLocked != null ? formatMkd(mkdLocked) : "Kurs i panjohur"}
+        </span>
       </span>
     </span>
   );

@@ -120,6 +120,15 @@ export function parseActivityDoc(
     typeof data.amountEur === "number" && !Number.isNaN(data.amountEur)
       ? data.amountEur
       : undefined;
+  const rateAtEntry =
+    typeof data.rateAtEntry === "number" && Number.isFinite(data.rateAtEntry)
+      ? data.rateAtEntry
+      : undefined;
+  const mkdValueAtEntry =
+    typeof data.mkdValueAtEntry === "number" &&
+    Number.isFinite(data.mkdValueAtEntry)
+      ? data.mkdValueAtEntry
+      : undefined;
   const previousCurrency = isLedgerCurrency(data.previousCurrency)
     ? data.previousCurrency
     : undefined;
@@ -127,6 +136,16 @@ export function parseActivityDoc(
     typeof data.previousAmountEur === "number" &&
     !Number.isNaN(data.previousAmountEur)
       ? data.previousAmountEur
+      : undefined;
+  const previousRateAtEntry =
+    typeof data.previousRateAtEntry === "number" &&
+    Number.isFinite(data.previousRateAtEntry)
+      ? data.previousRateAtEntry
+      : undefined;
+  const previousMkdValueAtEntry =
+    typeof data.previousMkdValueAtEntry === "number" &&
+    Number.isFinite(data.previousMkdValueAtEntry)
+      ? data.previousMkdValueAtEntry
       : undefined;
   const date = typeof data.date === "string" ? data.date : "";
   const actorEmail =
@@ -161,6 +180,8 @@ export function parseActivityDoc(
     amount,
     currency,
     amountEur,
+    rateAtEntry,
+    mkdValueAtEntry,
     date,
     previousClient:
       typeof data.previousClient === "string" ? data.previousClient : undefined,
@@ -168,6 +189,8 @@ export function parseActivityDoc(
       typeof data.previousAmount === "number" ? data.previousAmount : undefined,
     previousCurrency,
     previousAmountEur,
+    previousRateAtEntry,
+    previousMkdValueAtEntry,
     budgetDelta:
       typeof data.budgetDelta === "number" ? data.budgetDelta : undefined,
     source: data.source === "backfill" ? "backfill" : undefined,

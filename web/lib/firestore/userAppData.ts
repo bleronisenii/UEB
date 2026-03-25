@@ -10,7 +10,13 @@ import { getFirebaseFirestore } from "@/lib/firebase";
 import type { User } from "firebase/auth";
 import { appendActivityInTransaction } from "@/lib/firestore/activityLog";
 import { USER_APP_DATA_COLLECTION } from "@/lib/firestore/collections";
-import { convertToEur, isLedgerCurrency, ledgerAmountEur } from "@/lib/currency";
+import {
+  convertToEur,
+  isLedgerCurrency,
+  ledgerAmountEur,
+  mkdValueAtEntryForAmount,
+  rateAtEntryForCurrency,
+} from "@/lib/currency";
 import type { AuditSource } from "@/types/activityLog";
 import {
   EXPENSE_OWNER_KEYS,
@@ -52,6 +58,23 @@ function parseLedgerEntry(raw: unknown): LedgerEntry {
   const date = typeof o.date === "string" ? o.date : "";
   const id = typeof o.id === "string" ? o.id : undefined;
   const currency = isLedgerCurrency(o.currency) ? o.currency : undefined;
+  const rateAtEntry =
+    typeof o.rateAtEntry === "number" && Number.isFinite(o.rateAtEntry)
+      ? o.rateAtEntry
+      : undefined;
+  const mkdValueAtEntry =
+    typeof o.mkdValueAtEntry === "number" && Number.isFinite(o.mkdValueAtEntry)
+      ? o.mkdValueAtEntry
+      : undefined;
+  let createdAt: LedgerEntry["createdAt"] | undefined = undefined;
+  if (typeof o.createdAt === "number" && Number.isFinite(o.createdAt)) {
+    createdAt = o.createdAt;
+  } else if (o.createdAt && typeof o.createdAt === "object") {
+    // Legacy Timestamp (if any)
+    createdAt = o.createdAt as LedgerEntry["createdAt"];
+  } else if (o.createdAt === null) {
+    createdAt = null;
+  }
   let amountEur =
     typeof o.amountEur === "number" && !Number.isNaN(o.amountEur)
       ? o.amountEur
@@ -59,8 +82,14 @@ function parseLedgerEntry(raw: unknown): LedgerEntry {
   if (amountEur === undefined) {
     amountEur = amount;
   }
-  const entry: LedgerEntry = { id, client, amount, date, amountEur };
+  // IMPORTANT: Never put `undefined` into objects that are later written to Firestore.
+  // Firestore rejects documents containing undefined anywhere.
+  const entry: LedgerEntry = { client, amount, date, amountEur };
+  if (id) entry.id = id;
   if (currency) entry.currency = currency;
+  if (rateAtEntry !== undefined) entry.rateAtEntry = rateAtEntry;
+  if (mkdValueAtEntry !== undefined) entry.mkdValueAtEntry = mkdValueAtEntry;
+  if (createdAt !== undefined) entry.createdAt = createdAt;
   return entry;
 }
 
@@ -129,6 +158,8 @@ export async function addDashboardEntry(
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const amountEur = convertToEur(amount, currency, eurMkdRate, chfMkdRate);
+  const rateAtEntry = rateAtEntryForCurrency(currency, eurMkdRate, chfMkdRate);
+  const mkdValueAtEntry = mkdValueAtEntryForAmount(amount, currency, rateAtEntry);
   const entry: LedgerEntry = {
     id,
     client,
@@ -136,6 +167,9 @@ export async function addDashboardEntry(
     date: dateStr,
     currency,
     amountEur,
+    rateAtEntry,
+    mkdValueAtEntry,
+    createdAt: Date.now(),
   };
 
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -155,7 +189,8 @@ export async function addDashboardEntry(
           client: { to: client },
           amount: { to: amount },
           currency: { to: currency },
-          eurEquivalent: { to: amountEur },
+          rateAtEntry: { to: rateAtEntry },
+          mkdValueAtEntry: { to: mkdValueAtEntry },
         },
       },
       action: "create",
@@ -166,6 +201,8 @@ export async function addDashboardEntry(
       amount,
       currency,
       amountEur,
+      rateAtEntry,
+      mkdValueAtEntry,
       date: dateStr,
       budgetDelta: amountEur,
     });
@@ -229,6 +266,10 @@ export async function deleteDashboardEntry(
       amount: fromDb.amount,
       currency: fromDb.currency ?? "EUR",
       amountEur: removedEur,
+      ...(fromDb.rateAtEntry !== undefined ? { rateAtEntry: fromDb.rateAtEntry } : {}),
+      ...(fromDb.mkdValueAtEntry !== undefined
+        ? { mkdValueAtEntry: fromDb.mkdValueAtEntry }
+        : {}),
       date: fromDb.date,
       budgetDelta: -removedEur,
     });
@@ -248,6 +289,10 @@ export async function deleteDashboardEntry(
         amount: exp.amount,
         currency: exp.currency ?? "EUR",
         amountEur: ledgerAmountEur(exp),
+        ...(exp.rateAtEntry !== undefined ? { rateAtEntry: exp.rateAtEntry } : {}),
+        ...(exp.mkdValueAtEntry !== undefined
+          ? { mkdValueAtEntry: exp.mkdValueAtEntry }
+          : {}),
         date: exp.date,
       });
     }
@@ -284,6 +329,16 @@ export async function updateDashboardEntry(
       next.amount = newAmountInput;
       next.currency = newCurrency;
       next.amountEur = convertToEur(newAmountInput, newCurrency, eurMkdRate, chfMkdRate);
+      const nextRateAtEntry =
+        next.rateAtEntry != null && next.currency === prev.currency
+          ? next.rateAtEntry
+          : rateAtEntryForCurrency(newCurrency, eurMkdRate, chfMkdRate);
+      next.rateAtEntry = nextRateAtEntry;
+      next.mkdValueAtEntry = mkdValueAtEntryForAmount(
+        newAmountInput,
+        newCurrency,
+        nextRateAtEntry
+      );
       data.totalBudget = data.totalBudget - prevEur + next.amountEur;
       for (const k of EXPENSE_OWNER_KEYS) {
         data.expenses[k] = data.expenses[k].map((exp) =>
@@ -306,7 +361,8 @@ export async function updateDashboardEntry(
           client: { from: prev.client, to: next.client },
           amount: { from: prev.amount, to: next.amount },
           currency: { from: prev.currency ?? "EUR", to: next.currency ?? "EUR" },
-          eurEquivalent: { from: prevEur, to: nextEur },
+          rateAtEntry: { from: prev.rateAtEntry, to: next.rateAtEntry },
+          mkdValueAtEntry: { from: prev.mkdValueAtEntry, to: next.mkdValueAtEntry },
         },
       },
       action: "update",
@@ -317,11 +373,17 @@ export async function updateDashboardEntry(
       amount: next.amount,
       currency: next.currency ?? "EUR",
       amountEur: nextEur,
+      rateAtEntry: next.rateAtEntry,
+      mkdValueAtEntry: next.mkdValueAtEntry,
       date: next.date,
       previousClient: prev.client,
       previousAmount: prev.amount,
       previousCurrency: prev.currency ?? "EUR",
       previousAmountEur: prevEur,
+      ...(prev.rateAtEntry !== undefined ? { previousRateAtEntry: prev.rateAtEntry } : {}),
+      ...(prev.mkdValueAtEntry !== undefined
+        ? { previousMkdValueAtEntry: prev.mkdValueAtEntry }
+        : {}),
       budgetDelta,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -360,6 +422,8 @@ export async function addExpenseEntry(
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const amountEur = convertToEur(amount, currency, eurMkdRate, chfMkdRate);
+  const rateAtEntry = rateAtEntryForCurrency(currency, eurMkdRate, chfMkdRate);
+  const mkdValueAtEntry = mkdValueAtEntryForAmount(amount, currency, rateAtEntry);
   const entry: LedgerEntry = {
     id,
     client,
@@ -367,6 +431,9 @@ export async function addExpenseEntry(
     date: dateStr,
     currency,
     amountEur,
+    rateAtEntry,
+    mkdValueAtEntry,
+    createdAt: Date.now(),
   };
 
   await runTransaction(getFirebaseFirestore(), async (tx) => {
@@ -386,7 +453,8 @@ export async function addExpenseEntry(
           client: { to: client },
           amount: { to: amount },
           currency: { to: currency },
-          eurEquivalent: { to: amountEur },
+          rateAtEntry: { to: rateAtEntry },
+          mkdValueAtEntry: { to: mkdValueAtEntry },
         },
       },
       action: "create",
@@ -397,6 +465,8 @@ export async function addExpenseEntry(
       amount,
       currency,
       amountEur,
+      rateAtEntry,
+      mkdValueAtEntry,
       date: dateStr,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -457,6 +527,10 @@ export async function deleteExpenseEntry(
       amount: fromDb.amount,
       currency: fromDb.currency ?? "EUR",
       amountEur: ledgerAmountEur(fromDb),
+      ...(fromDb.rateAtEntry !== undefined ? { rateAtEntry: fromDb.rateAtEntry } : {}),
+      ...(fromDb.mkdValueAtEntry !== undefined
+        ? { mkdValueAtEntry: fromDb.mkdValueAtEntry }
+        : {}),
       date: fromDb.date,
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
@@ -491,6 +565,16 @@ export async function updateExpenseEntry(
       next.amount = newAmountInput;
       next.currency = newCurrency;
       next.amountEur = convertToEur(newAmountInput, newCurrency, eurMkdRate, chfMkdRate);
+      const nextRateAtEntry =
+        next.rateAtEntry != null && next.currency === prev.currency
+          ? next.rateAtEntry
+          : rateAtEntryForCurrency(newCurrency, eurMkdRate, chfMkdRate);
+      next.rateAtEntry = nextRateAtEntry;
+      next.mkdValueAtEntry = mkdValueAtEntryForAmount(
+        newAmountInput,
+        newCurrency,
+        nextRateAtEntry
+      );
     }
     list[idx] = next;
     data.expenses[ownerKey] = list;
@@ -507,7 +591,8 @@ export async function updateExpenseEntry(
           client: { from: prev.client, to: next.client },
           amount: { from: prev.amount, to: next.amount },
           currency: { from: prev.currency ?? "EUR", to: next.currency ?? "EUR" },
-          eurEquivalent: { from: prevEur, to: nextEur },
+          rateAtEntry: { from: prev.rateAtEntry, to: next.rateAtEntry },
+          mkdValueAtEntry: { from: prev.mkdValueAtEntry, to: next.mkdValueAtEntry },
         },
       },
       action: "update",
@@ -518,11 +603,17 @@ export async function updateExpenseEntry(
       amount: next.amount,
       currency: next.currency ?? "EUR",
       amountEur: nextEur,
+      rateAtEntry: next.rateAtEntry,
+      mkdValueAtEntry: next.mkdValueAtEntry,
       date: next.date,
       previousClient: prev.client,
       previousAmount: prev.amount,
       previousCurrency: prev.currency ?? "EUR",
       previousAmountEur: prevEur,
+      ...(prev.rateAtEntry !== undefined ? { previousRateAtEntry: prev.rateAtEntry } : {}),
+      ...(prev.mkdValueAtEntry !== undefined
+        ? { previousMkdValueAtEntry: prev.mkdValueAtEntry }
+        : {}),
     });
     tx.set(ref, { ...data, updatedAt: serverTimestamp() });
   });

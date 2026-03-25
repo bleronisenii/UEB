@@ -29,11 +29,15 @@ function activityToRow(ev: ActivityEventParsed): MoneyTimelineRow {
     amount: ev.amount,
     currency: ev.currency,
     amountEur,
+    rateAtEntry: ev.rateAtEntry,
+    mkdValueAtEntry: ev.mkdValueAtEntry,
     date: ev.date,
     budgetDelta: ev.budgetDelta,
     previousClient: ev.previousClient,
     previousAmount: ev.previousAmount,
     previousCurrency: ev.previousCurrency,
     previousAmountEur,
+    previousRateAtEntry: ev.previousRateAtEntry,
+    previousMkdValueAtEntry: ev.previousMkdValueAtEntry,
   };
 }

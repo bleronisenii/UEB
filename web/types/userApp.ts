@@ -19,8 +19,27 @@ export type LedgerEntry = {
   amount: number;
   /** Defaults to EUR when missing (legacy). */
   currency?: LedgerCurrency;
-  /** EUR equivalent at save time (for totals); legacy: same as `amount` when currency was EUR. */
+  /**
+   * Legacy field: EUR equivalent at save time (older logic).
+   * Kept for backward compatibility; new historical logic prefers `mkdValueAtEntry` + `rateAtEntry`.
+   */
   amountEur?: number;
+  /**
+   * Locked exchange rate used when the entry was created/last edited.
+   * Meaning: currency→MKD for the entry's currency.
+   * - MKD: 1
+   * - EUR: EUR→MKD at entry
+   * - CHF: CHF→MKD at entry
+   */
+  rateAtEntry?: number;
+  /** Locked MKD value at entry time (originalAmount × rateAtEntry). */
+  mkdValueAtEntry?: number;
+  /**
+   * Creation timestamp for array-stored entries.
+   * IMPORTANT: Firestore `serverTimestamp()` is not supported inside arrays, so we store a plain number (ms).
+   * Legacy data may still contain a Firestore Timestamp; we parse it safely.
+   */
+  createdAt?: number | Timestamp | null;
   date: string;
 };
 

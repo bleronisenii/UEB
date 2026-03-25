@@ -261,22 +261,6 @@ export function ReportsView({ user }: ReportsViewProps) {
             Shiko të ardhurat dhe shpenzimet sipas muajit ose vitit. Shumat janë në
             EUR (ekvivalent) si në buxhet.
           </p>
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="ledger-pagination-toggle"
-            style={{ display: "block", margin: "0 auto 8px" }}
-          >
-            Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/history")}
-            className="ledger-pagination-toggle"
-            style={{ display: "block", margin: "0 auto" }}
-          >
-            Historiku
-          </button>
         </div>
       </div>
 

@@ -21,6 +21,10 @@ export type MoneyTimelineRow = {
   /** Original amount in `currency`. */
   amount: number;
   currency?: LedgerCurrency;
+  /** Locked currency→MKD rate used when this event was recorded. */
+  rateAtEntry?: number;
+  /** Locked MKD value at entry time (amount × rateAtEntry). */
+  mkdValueAtEntry?: number;
   /** EUR equivalent (for MKD line / exports). */
   amountEur?: number;
   date: string;
@@ -30,6 +34,8 @@ export type MoneyTimelineRow = {
   previousAmount?: number;
   previousCurrency?: LedgerCurrency;
   previousAmountEur?: number;
+  previousRateAtEntry?: number;
+  previousMkdValueAtEntry?: number;
 };
 
 export type MoneyTimelineKindFilter = "all" | MoneyTimelineKind;

@@ -98,3 +98,32 @@ export function amountToMkdDisplay(
       return eurToMkd(amount, eurMkdRate);
   }
 }
+
+/** Rate locked at entry time: currency→MKD (EUR uses eurMkdRate, CHF uses chfMkdRate, MKD=1). */
+export function rateAtEntryForCurrency(
+  currency: LedgerCurrency,
+  eurMkdRate: number,
+  chfMkdRate: number
+): number {
+  switch (currency) {
+    case "MKD":
+      return 1;
+    case "EUR":
+      return eurMkdRate;
+    case "CHF":
+      return chfMkdRate;
+    default:
+      return eurMkdRate;
+  }
+}
+
+export function mkdValueAtEntryForAmount(
+  amount: number,
+  currency: LedgerCurrency,
+  rateAtEntry: number
+): number {
+  if (!Number.isFinite(amount)) return 0;
+  if (currency === "MKD") return amount;
+  if (!Number.isFinite(rateAtEntry) || rateAtEntry <= 0) return 0;
+  return amount * rateAtEntry;
+}
