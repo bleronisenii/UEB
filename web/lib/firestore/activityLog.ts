@@ -16,8 +16,11 @@ import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase";
 import {
   ACTIVITY_LOG_SUBCOLLECTION,
+  ORG_APP_DATA_SUBCOLLECTION,
+  ORGS_COLLECTION,
   USER_APP_DATA_COLLECTION,
 } from "@/lib/firestore/collections";
+import { getOrgId } from "@/lib/org";
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey } from "@/types/userApp";
 import type { UserAppData } from "@/types/userApp";
@@ -41,8 +44,22 @@ export function activityLogCollectionRef(uid: string) {
   );
 }
 
+export function orgActivityLogCollectionRef(orgId: string) {
+  return collection(
+    getFirebaseFirestore(),
+    ORGS_COLLECTION,
+    orgId,
+    ORG_APP_DATA_SUBCOLLECTION,
+    ACTIVITY_LOG_SUBCOLLECTION
+  );
+}
+
 function newActivityDocRef(uid: string) {
   return doc(activityLogCollectionRef(uid));
+}
+
+function newOrgActivityDocRef(orgId: string) {
+  return doc(orgActivityLogCollectionRef(orgId));
 }
 
 export type ActivityWritePayload = Omit<
@@ -54,10 +71,10 @@ export type ActivityWritePayload = Omit<
 
 export function appendActivityInTransaction(
   tx: Transaction,
-  uid: string,
+  orgId: string,
   payload: ActivityWritePayload
 ): void {
-  const ref = newActivityDocRef(uid);
+  const ref = newOrgActivityDocRef(orgId);
   const { source, ...rest } = payload;
   tx.set(ref, {
     ...rest,
@@ -74,7 +91,7 @@ export async function logAuditEvent(
   user: User,
   payload: ActivityWritePayload
 ): Promise<void> {
-  const ref = newActivityDocRef(user.uid);
+  const ref = newOrgActivityDocRef(getOrgId());
   const { source, ...rest } = payload;
   const db = getFirebaseFirestore();
   const batch = writeBatch(db);
@@ -203,8 +220,9 @@ export function subscribeActivityLog(
   onData: (events: ActivityEventParsed[]) => void,
   onError: (err: Error) => void
 ): Unsubscribe {
+  const orgId = getOrgId();
   const q = query(
-    activityLogCollectionRef(user.uid),
+    orgActivityLogCollectionRef(orgId),
     orderBy("createdAt", "desc"),
     limit(ACTIVITY_PAGE_SIZE)
   );
@@ -222,7 +240,7 @@ export function subscribeActivityLog(
   );
 }
 
-const uidBackfillScheduled = new Set<string>();
+const orgBackfillScheduled = new Set<string>();
 
 /**
  * If the log is empty but the user already has ledger rows, create one
@@ -232,10 +250,11 @@ export async function backfillActivityLogIfEmpty(
   user: User,
   data: UserAppData
 ): Promise<void> {
-  if (uidBackfillScheduled.has(user.uid)) return;
-  uidBackfillScheduled.add(user.uid);
+  const orgId = getOrgId();
+  if (orgBackfillScheduled.has(orgId)) return;
+  orgBackfillScheduled.add(orgId);
 
-  const col = activityLogCollectionRef(user.uid);
+  const col = orgActivityLogCollectionRef(orgId);
   const probe = await getDocs(query(col, limit(1)));
   if (!probe.empty) return;
 
@@ -243,7 +262,7 @@ export async function backfillActivityLogIfEmpty(
     data.dashboardEntries.length > 0 ||
     EXPENSE_OWNER_KEYS.some((k) => data.expenses[k].length > 0);
   if (!hasAny) {
-    uidBackfillScheduled.delete(user.uid);
+    orgBackfillScheduled.delete(orgId);
     return;
   }
 
@@ -314,7 +333,7 @@ export async function backfillActivityLogIfEmpty(
   try {
     await flush();
   } catch (e) {
-    uidBackfillScheduled.delete(user.uid);
+    orgBackfillScheduled.delete(orgId);
     throw e;
   }
 }
