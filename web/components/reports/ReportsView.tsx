@@ -258,8 +258,7 @@ export function ReportsView({ user }: ReportsViewProps) {
           <img src="/logo.png" alt="Logo" className="logo" />
           <h1>Përmbledhje</h1>
           <p className="history-intro">
-            Shiko të ardhurat dhe shpenzimet sipas muajit ose vitit. Shumat janë në
-            EUR (ekvivalent) si në buxhet.
+            Shiko të ardhurat dhe shpenzimet sipas muajit ose vitit. Shumat janë në EUR.
           </p>
         </div>
       </div>

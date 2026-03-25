@@ -1037,7 +1037,7 @@ function HistoryEntry({
   return (
     <tr>
       <td>{row.date}</td>
-      <td>{actorLabel(row)}</td>
+      <td className="history-actor">{actorLabel(row)}</td>
       <td>{kindCategory(row)}</td>
       <td>{veprimLabel(row)}</td>
       <td>{sourceLabel(row)}</td>
