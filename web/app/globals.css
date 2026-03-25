@@ -543,6 +543,23 @@ td.client {
   white-space: normal;
 }
 
+/* Historiku: long emails should wrap inside the "Përdoruesi" column */
+.history-data-table td.history-actor {
+  max-width: 180px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Historiku: prevent any column text from spilling into neighbors on narrow screens */
+.history-data-table th,
+.history-data-table td {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Ledger table area */
 .ledger-table-wrap {
   width: 100%;
