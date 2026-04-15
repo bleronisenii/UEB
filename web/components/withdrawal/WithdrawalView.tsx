@@ -43,7 +43,7 @@ const WITHDRAWAL_TITLES: Record<ExpenseOwnerKey, string> = {
   urim: "Pagesat - Urim",
   elvis: "Pagesat - Elvis",
   bunjamin: "Pagesat - Bunjamin",
-  puntoret: "Punëtorët",
+  puntoret: "UEB",
 };
 
 const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]> = {
@@ -53,7 +53,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "Punëtorët", href: "/puntoret" },
+    { label: "UEB", href: "/puntoret" },
   ],
   elvis: [
     { label: "Bunjamin", href: "/bunjamin" },
@@ -61,7 +61,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "Punëtorët", href: "/puntoret" },
+    { label: "UEB", href: "/puntoret" },
   ],
   bunjamin: [
     { label: "Urim", href: "/urim" },
@@ -69,7 +69,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "Punëtorët", href: "/puntoret" },
+    { label: "UEB", href: "/puntoret" },
   ],
   puntoret: [
     { label: "Dashboard", href: "/dashboard" },

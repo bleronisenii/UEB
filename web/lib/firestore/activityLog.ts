@@ -88,6 +88,27 @@ export async function logAuditEvent(
   await batch.commit();
 }
 
+export async function deleteActivityEventsByIds(ids: string[]): Promise<number> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => id.trim().length > 0)));
+  if (uniqueIds.length === 0) return 0;
+
+  const db = getFirebaseFirestore();
+  const orgId = getOrgId();
+  let deleted = 0;
+
+  for (let index = 0; index < uniqueIds.length; index += 450) {
+    const chunk = uniqueIds.slice(index, index + 450);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(orgActivityLogCollectionRef(orgId), id));
+    }
+    await batch.commit();
+    deleted += chunk.length;
+  }
+
+  return deleted;
+}
+
 function parseTimestampMs(data: DocumentData): Date | null {
   const ts = data.createdAt;
   if (ts && typeof ts.toDate === "function") {

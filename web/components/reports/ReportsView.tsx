@@ -384,7 +384,7 @@ export function ReportsView({ user }: ReportsViewProps) {
               Bunjamin
             </button>
             <button type="button" onClick={() => router.push("/puntoret")}>
-              Puntorët
+              UEB
             </button>
           </div>
         </div>

@@ -11,14 +11,16 @@ function escapeCsvCell(value: string | number | null | undefined): string {
   return `"${escaped}"`;
 }
 
-export function downloadExcelCsv(filename: string, rows: ExportRow[]): void {
-  if (rows.length === 0) return;
-
+export function buildCsvBlob(rows: ExportRow[]): Blob {
   const csvLines = rows.map((row) => row.map((cell) => escapeCsvCell(cell.value)).join(","));
   // UTF-8 BOM keeps Albanian characters readable in Excel.
   const csv = `\uFEFF${csvLines.join("\r\n")}`;
+  return new Blob([csv], { type: "text/csv;charset=utf-8;" });
+}
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+export function downloadExcelCsv(filename: string, rows: ExportRow[]): void {
+  if (rows.length === 0) return;
+  const blob = buildCsvBlob(rows);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
