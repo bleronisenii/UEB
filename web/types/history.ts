@@ -7,6 +7,8 @@ export type MoneyTimelineKind = "income" | "expense";
 /** Row in Historiku (from activity log). */
 export type MoneyTimelineRow = {
   id: string;
+  /** Log timestamp from Firestore (if available). */
+  createdAt?: Date | null;
   kind: MoneyTimelineKind;
   action: ActivityAction;
   actorEmail?: string | null;

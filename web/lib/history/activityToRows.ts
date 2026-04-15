@@ -17,6 +17,7 @@ function activityToRow(ev: ActivityEventParsed): MoneyTimelineRow {
       : ev.previousAmount;
   return {
     id: ev.id,
+    createdAt: ev.createdAt,
     actorEmail: ev.actorEmail,
     auditSource: ev.auditSource,
     eventType: ev.eventType,
