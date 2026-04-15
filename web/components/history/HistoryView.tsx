@@ -13,9 +13,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import JSZip from "jszip";
 import { getFirebaseAuth } from "@/lib/firebase";
 import {
   backfillActivityLogIfEmpty,
+  deleteActivityEventsByIds,
   logAuditEvent,
   subscribeActivityLog,
 } from "@/lib/firestore/activityLog";
@@ -35,11 +37,12 @@ import {
 } from "@/lib/formatMoney";
 import { amountToMkdDisplay, convertToEur } from "@/lib/currency";
 import { ledgerAmountEurLive, sumLedgerEntriesEurLive } from "@/lib/currency";
-import { downloadExcelCsv } from "@/lib/export/excelCsv";
+import { buildCsvBlob } from "@/lib/export/excelCsv";
 import { eurToMkd, formatMkd } from "@/lib/export/eurMkd";
 import { EXPENSE_OWNER_KEYS } from "@/types/userApp";
 import type { ExpenseOwnerKey, UserAppData } from "@/types/userApp";
 import type { ActivityEventParsed } from "@/types/activityLog";
+import type { ExportRow } from "@/lib/export/excelCsv";
 import type {
   MoneyTimelineKindFilter,
   MoneyTimelineOwnerFilter,
@@ -113,6 +116,7 @@ export function HistoryView({ user }: HistoryViewProps) {
     useState<MoneyTimelineOwnerFilter>("all");
   const [filterInput, setFilterInput] = useState("");
   const [tablePage, setTablePage] = useState(1);
+  const [monthlyExportBusy, setMonthlyExportBusy] = useState(false);
 
   const {
     rate,
@@ -251,31 +255,27 @@ export function HistoryView({ user }: HistoryViewProps) {
     return { balanceBeforeById: beforeMap, balanceAfterById: afterMap };
   }, [allRows, currentRemainingMkdHistorical]);
 
-  const exportHistory = useCallback(() => {
-    if (filteredRows.length === 0) {
-      alert("Nuk ka të dhëna për eksport.");
-      return;
-    }
+  const buildExportRows = useCallback(
+    (rowsToExport: MoneyTimelineRow[]): ExportRow[] => {
+      const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
 
-    const mkdFromEur = (eur: number) => formatMkd(eurToMkd(eur, rate));
+      const filteredIncomeTotal = rowsToExport
+        .filter((row) => row.kind === "income")
+        .reduce((sum, row) => sum + row.amount, 0);
+      const filteredExpenseTotal = rowsToExport
+        .filter((row) => row.kind === "expense")
+        .reduce((sum, row) => sum + row.amount, 0);
+      const totalBudget = appData
+        ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate)
+        : 0;
+      const totalExpenses = appData
+        ? Object.values(appData.expenses)
+            .flat()
+            .reduce((sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate), 0)
+        : 0;
+      const remaining = totalBudget - totalExpenses;
 
-    const filteredIncomeTotal = filteredRows
-      .filter((row) => row.kind === "income")
-      .reduce((sum, row) => sum + row.amount, 0);
-    const filteredExpenseTotal = filteredRows
-      .filter((row) => row.kind === "expense")
-      .reduce((sum, row) => sum + row.amount, 0);
-    const totalBudget = appData
-      ? sumLedgerEntriesEurLive(appData.dashboardEntries, rate, chfMkdRate)
-      : 0;
-    const totalExpenses = appData
-      ? Object.values(appData.expenses)
-          .flat()
-          .reduce((sum, e) => sum + ledgerAmountEurLive(e, rate, chfMkdRate), 0)
-      : 0;
-    const remaining = totalBudget - totalExpenses;
-
-    const rows = [
+      const rows: ExportRow[] = [
       [
         { header: "Data", value: "Data" },
         { header: "Lloji", value: "Lloji" },
@@ -286,7 +286,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "ShumaMKD", value: "Shuma (MKD)" },
         { header: "Ndikimi", value: "Ndikimi në buxhet" },
       ],
-      ...filteredRows.map((row) => [
+      ...rowsToExport.map((row) => [
         { header: "Data", value: row.date },
         { header: "Lloji", value: kindCategory(row) },
         { header: "Veprimi", value: veprimLabel(row) },
@@ -424,7 +424,7 @@ export function HistoryView({ user }: HistoryViewProps) {
       ],
       [
         { header: "Data", value: "Numri i rreshtave të eksportuar" },
-        { header: "Lloji", value: filteredRows.length },
+        { header: "Lloji", value: rowsToExport.length },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
         { header: "Pershkrimi", value: "" },
@@ -432,25 +432,98 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
       ],
-    ];
-    downloadExcelCsv("historiku-export", rows);
-    void logAuditEvent(user, {
-      actorEmail: user.email ?? null,
-      auditSource: "Historiku",
-      eventType: "export.excel",
-      changeDetails: {
-        summary: `Exported Excel (${filteredRows.length} rows)`,
-      },
-      action: "create",
-      stream: "income",
-      ownerKey: null,
-      entryId: null,
-      client: "Export Excel",
-      amount: filteredRows.length,
-      currency: "EUR",
-      date: new Date().toLocaleDateString(),
-    }).catch(() => {});
-  }, [appData, chfMkdRate, filteredRows, rate, user]);
+      ];
+
+      return rows;
+    },
+    [appData, chfMkdRate, rate]
+  );
+
+  const exportMonthlyZipAndClearHistory = useCallback(async () => {
+    if (allRows.length === 0) {
+      alert("Nuk ka të dhëna në historik për eksport mujor.");
+      return;
+    }
+    if (!confirm("Do të eksportohet ZIP mujor dhe pastaj do të pastrohet i gjithë historiku. Vazhdo?")) {
+      return;
+    }
+
+    const monthKeyForRow = (row: MoneyTimelineRow): string => {
+      if (row.createdAt && Number.isFinite(row.createdAt.getTime())) {
+        const y = row.createdAt.getFullYear();
+        const m = String(row.createdAt.getMonth() + 1).padStart(2, "0");
+        return `${y}-${m}`;
+      }
+      const parsed = new Date(row.date);
+      if (Number.isFinite(parsed.getTime())) {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, "0");
+        return `${y}-${m}`;
+      }
+      return `date-${row.date.replace(/[^\dA-Za-z._-]+/g, "-")}`;
+    };
+
+    const groups = new Map<string, MoneyTimelineRow[]>();
+    for (const row of allRows) {
+      const key = monthKeyForRow(row);
+      const list = groups.get(key);
+      if (list) {
+        list.push(row);
+      } else {
+        groups.set(key, [row]);
+      }
+    }
+
+    setMonthlyExportBusy(true);
+    try {
+      const zip = new JSZip();
+      const monthKeys = Array.from(groups.keys()).sort();
+      for (const monthKey of monthKeys) {
+        const monthRows = groups.get(monthKey) ?? [];
+        const csvRows = buildExportRows(monthRows);
+        const csvBlob = buildCsvBlob(csvRows);
+        zip.file(`historiku-${monthKey}.csv`, csvBlob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `historiku-mujor-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+
+      await deleteActivityEventsByIds(allRows.map((row) => row.id));
+      setFilterInput("");
+      setKindFilter("all");
+      setOwnerFilter("all");
+      setTablePage(1);
+      void logAuditEvent(user, {
+        actorEmail: user.email ?? null,
+        auditSource: "Historiku",
+        eventType: "export.excel",
+        changeDetails: {
+          summary: `Exported monthly ZIP (${groups.size} files) and cleared history (${allRows.length} rows)`,
+        },
+        action: "delete",
+        stream: "income",
+        ownerKey: null,
+        entryId: null,
+        client: "Monthly ZIP Export + Clear",
+        amount: allRows.length,
+        currency: "EUR",
+        date: new Date().toLocaleDateString(),
+      }).catch(() => {});
+      alert("ZIP mujor u krijua me sukses dhe historiku u pastrua.");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      alert(`Nuk u arrit eksporti mujor: ${msg}`);
+    } finally {
+      setMonthlyExportBusy(false);
+    }
+  }, [allRows, buildExportRows, user]);
 
   const onKindChange = useCallback((v: MoneyTimelineKindFilter) => {
     setKindFilter(v);
@@ -685,9 +758,10 @@ export function HistoryView({ user }: HistoryViewProps) {
               <button
                 type="button"
                 className="ledger-pagination-toggle excel-export-btn"
-                onClick={exportHistory}
+                onClick={() => void exportMonthlyZipAndClearHistory()}
+                disabled={monthlyExportBusy}
               >
-                Eksporto Excel
+                {monthlyExportBusy ? "Duke eksportuar..." : "Eksporto Mujor ZIP + Pastro"}
               </button>
               <button
                 type="button"
@@ -781,7 +855,7 @@ export function HistoryView({ user }: HistoryViewProps) {
               Bunjamin
             </button>
             <button type="button" onClick={() => router.push("/puntoret")}>
-              Puntorët
+              UEB
             </button>
           </div>
         </div>

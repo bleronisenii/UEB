@@ -767,7 +767,7 @@ export function DashboardView({ user }: DashboardViewProps) {
               Bunjamin
             </button>
             <button type="button" onClick={() => router.push("/puntoret")}>
-              Puntorët
+              UEB
             </button>
           </div>
         </div>
