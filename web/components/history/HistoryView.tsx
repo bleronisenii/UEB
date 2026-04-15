@@ -281,7 +281,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: "Lloji" },
         { header: "Veprimi", value: "Veprimi" },
         { header: "Pronari", value: "Pronari" },
-        { header: "Pershkrimi", value: "Përshkrimi" },
+        { header: "Përshkrimi", value: "Përshkrimi" },
         { header: "Shuma", value: "Shuma" },
         { header: "ShumaMKD", value: "Shuma (MKD)" },
         { header: "Ndikimi", value: "Ndikimi në buxhet" },
@@ -298,7 +298,7 @@ export function HistoryView({ user }: HistoryViewProps) {
               : "—",
         },
         {
-          header: "Pershkrimi",
+          header: "Përshkrimi",
           value:
             row.action === "update" &&
             row.previousClient != null &&
@@ -331,7 +331,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: "" },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
@@ -341,7 +341,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: "Vlera" },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
@@ -354,7 +354,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: String(rate) },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
@@ -367,7 +367,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: String(chfMkdRate) },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
@@ -377,7 +377,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: formatEur(totalBudget) },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: mkdFromEur(totalBudget) },
         { header: "Ndikimi", value: "" },
@@ -387,7 +387,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: `${totalExpenses} €` },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: mkdFromEur(totalExpenses) },
         { header: "Ndikimi", value: "" },
@@ -397,7 +397,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: formatEur(remaining) },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: mkdFromEur(remaining) },
         { header: "Ndikimi", value: "" },
@@ -407,7 +407,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: `${filteredIncomeTotal} €` },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: mkdFromEur(filteredIncomeTotal) },
         { header: "Ndikimi", value: "" },
@@ -417,7 +417,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: formatEur(filteredExpenseTotal) },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: mkdFromEur(filteredExpenseTotal) },
         { header: "Ndikimi", value: "" },
@@ -427,7 +427,7 @@ export function HistoryView({ user }: HistoryViewProps) {
         { header: "Lloji", value: rowsToExport.length },
         { header: "Veprimi", value: "" },
         { header: "Pronari", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Shuma", value: "" },
         { header: "ShumaMKD", value: "" },
         { header: "Ndikimi", value: "" },
@@ -854,7 +854,7 @@ export function HistoryView({ user }: HistoryViewProps) {
             <button type="button" onClick={() => router.push("/bunjamin")}>
               Bunjamin
             </button>
-            <button type="button" onClick={() => router.push("/puntoret")}>
+            <button type="button" onClick={() => router.push("/ueb")}>
               UEB
             </button>
           </div>

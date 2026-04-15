@@ -53,7 +53,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "UEB", href: "/puntoret" },
+    { label: "UEB", href: "/ueb" },
   ],
   elvis: [
     { label: "Bunjamin", href: "/bunjamin" },
@@ -61,7 +61,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "UEB", href: "/puntoret" },
+    { label: "UEB", href: "/ueb" },
   ],
   bunjamin: [
     { label: "Urim", href: "/urim" },
@@ -69,7 +69,7 @@ const WITHDRAWAL_NAV: Record<ExpenseOwnerKey, { label: string; href: string }[]>
     { label: "Dashboard", href: "/dashboard" },
     { label: "Historiku", href: "/history" },
     { label: "Përmbledhje", href: "/reports" },
-    { label: "UEB", href: "/puntoret" },
+    { label: "UEB", href: "/ueb" },
   ],
   puntoret: [
     { label: "Dashboard", href: "/dashboard" },
@@ -181,9 +181,8 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
   const remaining = totalBudget - totalAllExpenses;
   const title = WITHDRAWAL_TITLES[ownerKey];
   const nav = WITHDRAWAL_NAV[ownerKey];
-  const entryLabel = ownerKey === "puntoret" ? "Punëtori" : "Përshkrimi";
-  const entryPlaceholder =
-    ownerKey === "puntoret" ? "Shkruaj emrin e punëtorit..." : "Shkruaj emrin...";
+  const entryLabel = "Përshkrimi";
+  const entryPlaceholder = "Shkruaje përshkrimin...";
 
   const exportWithdrawals = useCallback(() => {
     if (filteredEntries.length === 0) {
@@ -201,7 +200,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
     const rows = [
       [
         { header: "Data", value: "Data" },
-        { header: "Pershkrimi", value: entryLabel },
+        { header: "Përshkrimi", value: entryLabel },
         { header: "Valuta", value: "Valuta" },
         { header: "Shuma", value: "Shuma (në valutë)" },
         { header: "EUR", value: "EUR (ekv.)" },
@@ -212,7 +211,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
         const cur = entry.currency ?? "EUR";
         return [
           { header: "Data", value: entry.date },
-          { header: "Pershkrimi", value: entry.client },
+          { header: "Përshkrimi", value: entry.client },
           { header: "Valuta", value: cur },
           { header: "Shuma", value: entry.amount },
           { header: "EUR", value: formatEur(eur) },
@@ -226,7 +225,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       }),
       [
         { header: "Data", value: "" },
-        { header: "Pershkrimi", value: "" },
+        { header: "Përshkrimi", value: "" },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -234,7 +233,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Përmbledhje" },
-        { header: "Pershkrimi", value: "Vlera" },
+        { header: "Përshkrimi", value: "Vlera" },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -245,7 +244,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           header: "Data",
           value: "Kursi i përdorur për konvertim (1 EUR = MKD)",
         },
-        { header: "Pershkrimi", value: formatRate(rate) },
+        { header: "Përshkrimi", value: formatRate(rate) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -256,7 +255,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
           header: "Data",
           value: "Kursi i përdorur për konvertim (1 CHF = MKD)",
         },
-        { header: "Pershkrimi", value: formatRate(chfMkdRate) },
+        { header: "Përshkrimi", value: formatRate(chfMkdRate) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -264,7 +263,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Totali buxhetit (global)" },
-        { header: "Pershkrimi", value: formatEur(totalBudget) },
+        { header: "Përshkrimi", value: formatEur(totalBudget) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -272,7 +271,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Totali daljeve (global)" },
-        { header: "Pershkrimi", value: formatEur(totalAllExpenses) },
+        { header: "Përshkrimi", value: formatEur(totalAllExpenses) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -280,7 +279,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Fitimi / Gjendja aktuale (global)" },
-        { header: "Pershkrimi", value: formatEur(remaining) },
+        { header: "Përshkrimi", value: formatEur(remaining) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -288,7 +287,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: `Totali i tabit ${title}` },
-        { header: "Pershkrimi", value: formatEur(myTotal) },
+        { header: "Përshkrimi", value: formatEur(myTotal) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -296,7 +295,7 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Totali i rreshtave të eksportuar" },
-        { header: "Pershkrimi", value: formatEur(exportedTotal) },
+        { header: "Përshkrimi", value: formatEur(exportedTotal) },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
@@ -304,14 +303,15 @@ export function WithdrawalView({ user, ownerKey }: WithdrawalViewProps) {
       ],
       [
         { header: "Data", value: "Numri i rreshtave të eksportuar" },
-        { header: "Pershkrimi", value: filteredEntries.length },
+        { header: "Përshkrimi", value: filteredEntries.length },
         { header: "Valuta", value: "" },
         { header: "Shuma", value: "" },
         { header: "EUR", value: "" },
         { header: "MKD", value: "" },
       ],
     ];
-    downloadExcelCsv(`${ownerKey}-export`, rows);
+    const exportOwnerKey = ownerKey === "puntoret" ? "ueb" : ownerKey;
+    downloadExcelCsv(`${exportOwnerKey}-export`, rows);
     void logAuditEvent(user, {
       actorEmail: user.email ?? null,
       auditSource: "Pagesat",

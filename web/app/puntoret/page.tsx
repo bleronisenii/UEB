@@ -1,5 +1,5 @@
-import { WithdrawalPage } from "@/components/withdrawal/WithdrawalPage";
+import { redirect } from "next/navigation";
 
 export default function PuntoretPage() {
-  return <WithdrawalPage ownerKey="puntoret" />;
+  redirect("/ueb");
 }

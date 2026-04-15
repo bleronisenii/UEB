@@ -383,7 +383,7 @@ export function ReportsView({ user }: ReportsViewProps) {
             <button type="button" onClick={() => router.push("/bunjamin")}>
               Bunjamin
             </button>
-            <button type="button" onClick={() => router.push("/puntoret")}>
+            <button type="button" onClick={() => router.push("/ueb")}>
               UEB
             </button>
           </div>
