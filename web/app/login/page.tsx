@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -14,10 +11,6 @@ function getAuthErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
     const code = (err as { code?: string }).code;
     switch (code) {
-      case "auth/email-already-in-use":
-        return "Ky email është tashmë i regjistruar.";
-      case "auth/weak-password":
-        return "Fjalëkalimi është shumë i shkurtër (minimum 6 karaktere).";
       case "auth/invalid-email":
         return "Email i pavlefshëm.";
       case "auth/user-not-found":
@@ -42,10 +35,8 @@ function getAuthErrorMessage(err: unknown): string {
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -57,25 +48,6 @@ export default function LoginPage() {
     e.preventDefault();
     const auth = getFirebaseAuth();
     const trimmed = email.trim();
-
-    if (mode === "signup") {
-      if (password !== confirmPassword) {
-        alert("Fjalëkalimet nuk përputhen.");
-        return;
-      }
-      if (password.length < 6) {
-        alert("Fjalëkalimi duhet të ketë të paktën 6 karaktere.");
-        return;
-      }
-      try {
-        await createUserWithEmailAndPassword(auth, trimmed, password);
-        router.push("/dashboard");
-        router.refresh();
-      } catch (err) {
-        alert(getAuthErrorMessage(err));
-      }
-      return;
-    }
 
     try {
       await signInWithEmailAndPassword(auth, trimmed, password);
@@ -109,7 +81,7 @@ export default function LoginPage() {
           <div className="login-page-toolbar">
             <ThemeToggle />
           </div>
-          <h1>{mode === "login" ? "Hyrje" : "Regjistrohu"}</h1>
+          <h1>Hyrje</h1>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
@@ -130,67 +102,18 @@ export default function LoginPage() {
               <input
                 id="login-password"
                 type="password"
-                autoComplete={
-                  mode === "signup" ? "new-password" : "current-password"
-                }
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Fjalëkalimi"
                 required
-                minLength={mode === "signup" ? 6 : undefined}
               />
             </div>
 
-            {mode === "signup" && (
-              <div className="form-group">
-                <label htmlFor="login-confirm">Përsërit fjalëkalimin</label>
-                <input
-                  id="login-confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Përsërit fjalëkalimin"
-                  required
-                  minLength={6}
-                />
-              </div>
-            )}
-
             <button id="addBtn" type="submit">
-              {mode === "login" ? "Hyr" : "Krijo llogari"}
+              Hyr
             </button>
           </form>
-
-          <p className="login-toggle">
-            {mode === "login" ? (
-              <>
-                Nuk keni llogari?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("signup");
-                    setConfirmPassword("");
-                  }}
-                >
-                  Regjistrohu
-                </button>
-              </>
-            ) : (
-              <>
-                Keni llogari?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("login");
-                    setConfirmPassword("");
-                  }}
-                >
-                  Hyr
-                </button>
-              </>
-            )}
-          </p>
         </div>
       </div>
     </div>
