@@ -1115,22 +1115,6 @@ h1{
   margin-bottom: 8px;
 }
 
-.login-toggle {
-  margin-top: 1rem;
-  text-align: center;
-  font-size: 14px;
-}
-
-.login-toggle button {
-  background: none;
-  border: none;
-  color: #2196f3;
-  cursor: pointer;
-  text-decoration: underline;
-  font: inherit;
-  padding: 0;
-}
-
 /* Table pagination (under ledger tables) */
 .table-pagination {
   display: flex;
